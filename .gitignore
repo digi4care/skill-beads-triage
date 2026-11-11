@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+release/*.tgz
+*.log
+.DS_Store
+.bv/

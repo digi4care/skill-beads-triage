@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.5
+links:
+- SYS006: TDn7zWv36rL_FayHYjJCkv4ZuZXziNdFtnfDKTuMcWQ=
+normative: true
+ref: ''
+reviewed: mqIUxmFdNpf0cPoz9JdZP32i_3CMzLzWyxsxGWv3hkY=
+text: |
+  Inspect the CI workflow and run its local equivalents. Confirm that no workflow automatically tags, publishes, or releases.

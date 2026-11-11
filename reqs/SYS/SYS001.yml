@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.0
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: 3E3KYD3LK8ESbnqftvZ-090ugKU6U_pamEoPv0cwZeA=
+text: |
+  The package shall provide the bead-triage skill and exactly seven thin OpenCode command templates for continue, complete, add, status, tests, reflect, and scaffold. The canonical skill shall reside in a bead-triage directory and commands shall preserve the user's current agent and model selection.

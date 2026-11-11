@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.0
+links:
+- SYS001: 0E-4noaZU38glucBmiswSD3hDnX2IoRaqqeen4a4EiI=
+normative: true
+ref: ''
+reviewed: 4Imr5hBW6RyhVTMhJ1i88jaZqs_5_UPvpTxuPil9MCk=
+text: |
+  Verify the canonical skill layout, all seven command files, their one-mode reference mappings, and absence of agent, model, or subagent overrides.

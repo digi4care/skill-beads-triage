@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.4
+links:
+- SYS005: kq1_skcRZxAYy8E_BrjRb5lQ6QaItIozwFcwD3w7LJg=
+normative: true
+ref: ''
+reviewed: aVLSg70bj-GU0CSBUGf3WJY7PYbNDrHH00lPoz2j1P8=
+text: |
+  Validate Doorstop documents and links, read back beads and dependencies, confirm AGENTS.md beads instructions, and run bv --help only after bead creation.

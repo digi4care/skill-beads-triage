@@ -1,0 +1,10 @@
+{
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD024": false,
+    "MD033": false
+  },
+  "globs": ["**/*.md", "src/.agents/**/*.md", "src/.opencode/**/*.md"],
+  "ignores": ["node_modules/**", ".git/**", "release/**"]
+}

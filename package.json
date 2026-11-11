@@ -1,0 +1,66 @@
+{
+  "name": "@digi4care/skill-beads-triage",
+  "version": "0.1.0",
+  "description": "OpenCode skill and commands for beads_rust issue triage with optional Doorstop traceability.",
+  "type": "module",
+  "bin": {
+    "bt-triage": "./bin/bt-triage.js"
+  },
+  "files": [
+    "bin/",
+    "src/.agents/skills/bead-triage/",
+    "src/.opencode/commands/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "lint": "npm run lint:biome && npm run lint:md",
+    "lint:biome": "biome lint bin/ test/",
+    "lint:md": "markdownlint-cli2",
+    "format": "biome format --write bin/ test/",
+    "format:check": "biome format bin/ test/",
+    "test": "node --test test/*.test.js",
+    "check": "npm run lint && npm run format:check && npm test",
+    "deps:check": "ncu --cooldown 7d --errorLevel 2",
+    "deps:update": "ncu --cooldown 7d --upgrade --doctor --doctorTest \"npm run check\"",
+    "validate": "npm run check && npm run deps:check && npm audit --audit-level=low && npm pack --dry-run",
+    "prepush": "npm run validate",
+    "prepublishOnly": "npm run validate"
+  },
+  "keywords": [
+    "opencode",
+    "beads",
+    "beads-rust",
+    "doorstop",
+    "issue-tracking",
+    "ai-agent",
+    "skills",
+    "triage"
+  ],
+  "author": "Chris Engelhard <chris@chrisengelhard.nl>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/digi4care/skill-beads-triage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/digi4care/skill-beads-triage/issues"
+  },
+  "homepage": "https://github.com/digi4care/skill-beads-triage#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.4",
+    "markdownlint-cli2": "^0.24.0",
+    "npm-check-updates": "^23.1.1"
+  },
+  "overrides": {
+    "katex": "^0.18.2",
+    "re2js": "^2.8.7"
+  }
+}

@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.4
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: GCMiJkx_Ibgj8nRAyprTfcsW0SR_hyfOJdcy0nLOOew=
+text: |
+  Doorstop shall own stable requirements and requirement-to-verification traceability, while beads_rust shall own execution tasks, dependencies, claims, progress, evidence, and closure. AGENTS.md shall be initialized or enriched through br agents --add after beads initialization. beads_viewer help and triage shall be used only after beads exist.

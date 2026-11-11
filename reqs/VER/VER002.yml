@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.1
+links:
+- SYS002: mdzw_AdMJj-oHDjLrPiJRdLf1u7b28qBxKwj6RnBTNY=
+normative: true
+ref: ''
+reviewed: rVj6DT561ff_3fWwvEDXegQLu-b7nenQGVgY1Jym4CI=
+text: |
+  Run installer unit and temporary-directory integration tests for path mapping, dry-run, collisions, updates, and safe uninstall; inspect help and the packed CLI.

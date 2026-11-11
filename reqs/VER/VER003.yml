@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.2
+links:
+- SYS003: 8Scty-vloe_5e0lVDYxOe98B-TLQDSaQOW7RmlNOAhM=
+normative: true
+ref: ''
+reviewed: Y7wAdYQyZUrYvGonI0jRat0gL2oCow1Yc3BadQmvKmU=
+text: |
+  Inspect package metadata and documentation for correct identity, SemVer 0.1.0, Keep a Changelog structure, MIT licensing, creator information, and the beads_rust rationale.

@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.2
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: S4PpHErriD0uWS9Y9SVhFGPo5QxIUw6ipddz-JuK9Ak=
+text: |
+  Package metadata shall identify @digi4care/skill-beads-triage version 0.1.0, the bt-triage executable, and the digi4care/skill-beads-triage GitHub repository. English documentation shall include README, AGENTS.md, CHANGELOG.md, and MIT LICENSE. The README shall credit Chris Engelhard (chris@chrisengelhard.nl, https://github.com/digi4care) and explain that the skill was created to make beads_rust (br) triage repeatable and traceable without overloading the main agent, rather than targeting the original bd tool.

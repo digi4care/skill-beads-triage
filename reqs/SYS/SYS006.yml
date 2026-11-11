@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.5
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: 1B7GT_Ru0Nzi2EK5vqk3OcdjHlZoP44_xE5Qp3cT9S4=
+text: |
+  GitHub Actions shall validate dependency freshness, linting, tests, installer integration, and package contents on pushes and pull requests. Version tags, npm publication, and releases shall remain manual and require explicit user authorization.

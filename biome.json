@@ -1,0 +1,74 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/coverage",
+      "!**/.beads",
+      "!**/.firm"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noStaticOnlyClass": "off",
+        "noForEach": "off",
+        "noUselessSwitchCase": "off",
+        "useLiteralKeys": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noAssignInExpressions": "off",
+        "noConsole": { "level": "off", "options": { "allow": ["log"] } }
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useNodejsImportProtocol": "off",
+        "noUnusedTemplateLiteral": "off",
+        "useSingleVarDeclarator": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/bin/**/*.js", "**/*.test.ts", "**/*.spec.ts", "**/smoke-test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": { "level": "off", "options": { "allow": ["log"] } }
+          },
+          "style": {
+            "useTemplate": "off",
+            "noUselessElse": "off"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+active: true
+derived: false
+header: ''
+level: 1.0
+links: []
+normative: true
+ref: ''
+reviewed: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+text: |
+  The repository shall provide an installable, versioned OpenCode bead-triage workflow for beads_rust (br), including canonical assets, safe installation, traceable requirements, tested dependencies, documentation, and manual releases.

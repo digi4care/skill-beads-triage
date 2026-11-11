@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.3
+links:
+- SYS004: VS_1-UcoIT_W0TQZZBk6_y4w9fBHf3E7mdSqR9y57Uc=
+normative: true
+ref: ''
+reviewed: f4I9SOHc0Pf7BZB_vkcMgRAyEaJ_rXdk9iIodYZ5NY0=
+text: |
+  Run dependency freshness checks with a seven-day cooldown, Biome, Markdown lint, all tests, and npm pack verification before push and record the results.

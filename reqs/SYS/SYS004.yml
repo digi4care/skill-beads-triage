@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.3
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: jxaDrnKYnY0rqjjkGspTQbkm5TTF9-FupVB9z_BJCxI=
+text: |
+  The repository shall use Biome, markdownlint-cli2, Node built-in tests, and npm package verification. npm and npm-check-updates shall enforce a seven-day release-age policy. A pre-push workflow shall check for eligible updates and run full validation; only up-to-date validated code may be pushed. Exceptions require explicit user approval.
