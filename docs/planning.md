@@ -19,6 +19,13 @@ uvx doorstop@3.2
 
 A Doorstop `reviewed` fingerprint detects content changes; it is not a record of human approval.
 
+## Harness compatibility planning
+
+The repository keeps one canonical skill and routes harness differences through installer adapters. `SYS001` and
+`VER001` cover direct mode routing and wrapper equivalence. `SYS002` and `VER002` cover adapter paths, registry v1
+migration, shared ownership, and lifecycle safety. Documentation may describe generic `.agents/skills/` installation
+support, but must not turn that path compatibility into a claim of runtime certification for every harness.
+
 ## beads_rust and beads_viewer
 
 The `br` tracker owns implementation tasks, dependencies, claims, progress, evidence, and closure. Relevant bead

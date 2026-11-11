@@ -4,6 +4,10 @@ Mode: `continue` and `complete`. This reference owns scope selection, reconcilia
 approvals and blockers, reconcile, and stop/pause. Prerequisite, CI and tooling repair is defined once in
 `references/tooling.md`; use that file instead of a duplicate section here.
 
+Entry forms: `/bt_continue [scope]`, `/bt_complete <bead/epic|all>`, `bead-triage continue [scope]`, and
+`bead-triage complete <bead/epic|all>`. In the direct forms the leading mode token is consumed and the remaining
+tokens are the runtime arguments.
+
 ## 1. Select the scope
 
 - `/bt_continue [scope]` — resume the clear active or contextual scope.

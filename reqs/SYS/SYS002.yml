@@ -8,4 +8,4 @@ normative: true
 ref: ''
 reviewed: EJF-AnXkzT_m3BZjqoScQXS7eZGUE9FGAlTJIhxh6WA=
 text: |
-  The bt-triage installer shall support global, project, and custom-target installation of both skill and commands. It shall provide accurate help and diagnostics, dry-run behavior, collision handling, safe updates, and registry-based uninstall that removes only registered files and preserves unrelated or modified user data. It shall not perform Git commits, pushes, releases, or br sync.
+  The bt-triage installer shall support global, project, and custom-target installation for the opencode, claude, codex, pi, and generic agents adapters, using their documented skill paths and installing command files only for OpenCode. It shall preserve safe updates and uninstall across adapters that share .agents/skills files, migrate existing registries, and remove a shared file only after its last registered owner is removed. It shall provide accurate help and diagnostics, dry-run behavior, collision handling, and registry-based uninstall that preserves unrelated or modified user data. It shall not perform Git commits, pushes, releases, or br sync.

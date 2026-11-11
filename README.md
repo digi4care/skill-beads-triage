@@ -1,8 +1,9 @@
-# bead-triage for OpenCode
+# bead-triage for agent harnesses
 
-An OpenCode skill and seven `/bt_*` commands for repeatable, traceable issue triage with
-[beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`). Optional Doorstop integration connects
-implementation work to stable requirements and verification items.
+A portable [Agent Skills](https://agentskills.io/specification) package for repeatable, traceable issue triage with
+[beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`). Harness adapters install one canonical skill;
+OpenCode additionally receives seven `/bt_*` commands. Optional Doorstop integration connects implementation work to
+stable requirements and verification items.
 
 ## Why this skill exists
 
@@ -10,32 +11,58 @@ beads_rust provides the tracker, but an agent still needs a consistent procedure
 claims, recording evidence, and deciding when to stop. This package moves that procedure into a focused skill so
 the main agent does not have to reconstruct tool-specific triage rules in every session.
 
-The commands use `br`, not the original Beads `bd` CLI. [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer)
+The workflow uses `br`, not the original Beads `bd` CLI. [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer)
 (`bv`) adds read-only, graph-aware triage after beads exist. Doorstop remains optional except when explicitly using
-`/bt_scaffold` or working in a project that already has Doorstop configuration.
+scaffold mode or working in a project that already has Doorstop configuration.
 
-## Included commands
+## Compatibility and invocation
 
-| Command | Purpose |
-| --- | --- |
-| `/bt_continue [scope]` | Resume the active or contextual scope and continue safely actionable work. |
-| `/bt_complete <bead/epic\|all>` | Complete a bead or epic; only literal `all` selects the repository. |
-| `/bt_add <description>` | Add one work item with the required traceability and validation. |
-| `/bt_status [scope]` | Inspect and explain current state without changing it. |
-| `/bt_tests [scope]` | Run the dedicated test verification and audit workflow. |
-| `/bt_reflect [scope]` | Analyze a session and propose reusable improvements without editing assets. |
-| `/bt_scaffold [project-directory]` | Explicitly initialize beads and Doorstop structures in an existing Git worktree. |
+The skill instructions and references are shared. Discovery paths and invocation syntax are harness-specific; the
+Agent Skills specification does not standardize slash commands or prompt arguments.
 
-Every command loads the shared `bead-triage` skill and exactly one mode reference. Commands preserve the current
-OpenCode agent and model selection. Interactive communication follows the skill's Dutch-language convention;
-repository artifacts and tracking records are written in English.
+| Adapter | Harness | Primary invocation | Installed assets |
+| --- | --- | --- | --- |
+| `opencode` | OpenCode | `/bt_<mode> [args]` | Canonical skill plus seven command wrappers |
+| `claude` | Claude Code | `/bead-triage <mode> [args]` | Canonical skill in `.claude/skills/` |
+| `codex` | Codex CLI | `$bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` |
+| `pi` | Pi | `/skill:bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` |
+| `agents` | Documented Agent Skills consumers | Native skill invocation with `<mode> [args]` | Canonical skill in `.agents/skills/` |
+
+The `agents` adapter uses paths documented by consumers including Codex, Cursor, Gemini CLI, Pi, OpenCode, and the
+VS Code Local harness. It is a generic **skill installation route**, not a claim of universal runtime compatibility
+or universal `/bt_*` support. Claude Code requires its own adapter, and GitHub Copilot uses different paths that are
+not currently installed by this package.
+
+Claude Code invokes the canonical skill directly; no legacy `.claude/commands/` files or extra wrapper skills are
+installed. Current Codex CLI releases no longer support the former custom-prompt mechanism, so the Codex adapter
+also uses direct skill invocation rather than prompt files.
+
+## Modes and OpenCode commands
+
+| Mode | OpenCode command | Purpose |
+| --- | --- | --- |
+| `continue` | `/bt_continue [scope]` | Resume the active or contextual scope and continue safely actionable work. |
+| `complete` | `/bt_complete <bead/epic\|all>` | Complete a bead or epic; only literal `all` selects the repository. |
+| `add` | `/bt_add <description>` | Add one work item with the required traceability and validation. |
+| `status` | `/bt_status [scope]` | Inspect and explain current state without changing it. |
+| `tests` | `/bt_tests [scope]` | Run the dedicated test verification and audit workflow. |
+| `reflect` | `/bt_reflect [scope]` | Analyze a session and propose reusable improvements without editing assets. |
+| `scaffold` | `/bt_scaffold [project-directory]` | Explicitly initialize beads and Doorstop structures in an existing Git worktree. |
+
+Every OpenCode command loads the shared skill and exactly one mode reference while preserving the current agent and
+model selection. Direct skill invocation routes `<mode>` through the same reference mapping. Missing or unknown
+modes stop with usage instead of guessing.
+
+Interactive communication follows the skill's Dutch-language convention; repository artifacts and tracking records
+are written in English. Harness-specific tool and session capabilities remain subject to the skill's safety gates;
+for example, reflect mode does not assume OpenCode session environment variables in another harness.
 
 ## Requirements
 
 For installing the assets:
 
 - Node.js 20 or newer.
-- OpenCode with support for `.agents` skills and `.opencode` commands.
+- A supported harness with the documented skill or command discovery support.
 
 For using the workflow:
 
@@ -45,49 +72,69 @@ For using the workflow:
 
 ## Installation
 
-Install the npm package globally, then choose where the OpenCode assets should live:
+Install the npm package globally:
 
 ```sh
 npm install --global @digi4care/skill-beads-triage
 ```
 
-### Global OpenCode installation
+Select an adapter with `--harness`. The default remains `opencode` for backwards compatibility. Use `all` to install
+every explicit adapter; shared skill files are registered to each owner without being copied from separate sources.
+
+### Global installation
 
 ```sh
-bt-triage install --global
+bt-triage install --global --harness opencode
+bt-triage install --global --harness claude
+bt-triage install --global --harness codex
+bt-triage install --global --harness pi
+bt-triage install --global --harness agents
 ```
 
-This installs:
+Or install all supported adapters:
 
-- `~/.agents/skills/bead-triage/`
-- `~/.config/opencode/commands/bt_*.md`
+```sh
+bt-triage install --global --harness all
+```
+
+Global destinations are:
+
+| Adapter | Destination |
+| --- | --- |
+| `opencode` | `~/.agents/skills/bead-triage/` and `~/.config/opencode/commands/bt_*.md` |
+| `claude` | `~/.claude/skills/bead-triage/` |
+| `codex`, `pi`, `agents` | `~/.agents/skills/bead-triage/` |
 
 ### One project
 
 Run from the project root:
 
 ```sh
-bt-triage install --project
+bt-triage install --project --harness opencode
+bt-triage install --project --harness claude
+bt-triage install --project --harness codex
 ```
 
 Or invoke the package without installing its CLI globally:
 
 ```sh
-npx --package @digi4care/skill-beads-triage bt-triage install --project
+npx --package @digi4care/skill-beads-triage bt-triage install --project --harness all
 ```
 
-This installs `.agents/skills/bead-triage/` and `.opencode/commands/bt_*.md` below the project root.
+Project destinations are `.agents/skills/bead-triage/` for every adapter except Claude Code, which uses
+`.claude/skills/bead-triage/`. OpenCode additionally installs `.opencode/commands/bt_*.md`.
 
 ### Custom target
 
 ```sh
-bt-triage install --target /path/to/project
+bt-triage install --target /path/to/project --harness all
 ```
 
-A custom target uses the same layout as a project installation. Preview any installation without writing files:
+A custom target uses the same relative layout as a project installation. Preview any installation without writing
+files:
 
 ```sh
-bt-triage install --project --dry-run
+bt-triage install --project --harness all --dry-run
 ```
 
 ## Updates, diagnostics, and removal
@@ -95,9 +142,9 @@ bt-triage install --project --dry-run
 After updating the npm package, refresh already installed assets:
 
 ```sh
-bt-triage update --global
-bt-triage update --project
-bt-triage update --target /path/to/project
+bt-triage update --global --harness all
+bt-triage update --project --harness claude
+bt-triage update --target /path/to/project --harness opencode
 ```
 
 Useful inspection commands:
@@ -111,17 +158,21 @@ bt-triage doctor
 bt-triage --help
 ```
 
-Remove only the files managed by the installer:
+Remove one adapter or every adapter managed by the installer:
 
 ```sh
-bt-triage uninstall --project --dry-run
-bt-triage uninstall --project
+bt-triage uninstall --project --harness claude --dry-run
+bt-triage uninstall --project --harness all
 ```
 
-Each scope has a `.bt-triage-registry.json` containing registered paths and SHA-256 checksums. Uninstall preserves
-locally modified and unregistered files, and removes only empty managed directories. Install and update report
-collisions instead of silently overwriting them. Use `--force` only after inspecting the reported files; it permits
-overwriting modified or unregistered targets.
+Each scope has a `.bt-triage-registry.json` containing registered paths and SHA-256 checksums per harness. Adapters
+that share `.agents/skills/bead-triage/` share ownership records: uninstalling one adapter keeps files required by
+another, and only the last owner can remove an unchanged shared file. Existing OpenCode registries are migrated
+transparently.
+
+Uninstall preserves locally modified and unregistered files and removes only empty managed directories. Install and
+update report collisions instead of silently overwriting them. Use `--force` only after inspecting the reported
+files; it permits overwriting modified or unregistered targets.
 
 The installer never runs `br sync`, stages or commits Git changes, pushes, publishes, or creates releases.
 
@@ -146,6 +197,10 @@ npm run prepush        # required successful check before any authorized push
 
 GitHub Actions runs `npm run validate` on pushes, pull requests, and manual workflow dispatch. CI contains no tag,
 release, or npm publication step.
+
+Filesystem installation tests and packed-CLI lifecycle checks verify the adapters shipped by this repository. They
+do not replace runtime smoke tests in each harness CLI, and compatibility documentation distinguishes documented
+support from behavior exercised locally.
 
 ### Dependency policy
 

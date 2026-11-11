@@ -153,7 +153,10 @@ describe("cli", () => {
     writeFileSync(outside, "user data\n");
     const registryPath = join(home, ".bt-triage-registry.json");
     const registry = JSON.parse(readFileSync(registryPath, "utf8"));
-    registry.groups.commands.files.push({ path: "../outside.md", sha256: "a".repeat(64) });
+    registry.harnesses.opencode.commands.files.push({
+      path: "../outside.md",
+      sha256: "a".repeat(64),
+    });
     writeFileSync(registryPath, JSON.stringify(registry, null, 2));
 
     const uninstall = run(["uninstall", "--global"], env);
@@ -174,7 +177,10 @@ describe("cli", () => {
     assert.equal(run(["install", "--global"], env).code, 0);
     const registryPath = join(home, ".bt-triage-registry.json");
     const registry = JSON.parse(readFileSync(registryPath, "utf8"));
-    registry.groups.commands.files.push({ path: "/tmp/absolute.md", sha256: "a".repeat(64) });
+    registry.harnesses.opencode.commands.files.push({
+      path: "/tmp/absolute.md",
+      sha256: "a".repeat(64),
+    });
     writeFileSync(registryPath, JSON.stringify(registry, null, 2));
 
     const install = run(["install", "--global"], env);

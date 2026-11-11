@@ -4,8 +4,10 @@ description: Complete a bead or epic, or the whole repository with the literal a
 
 # /bt_complete
 
-Load @bead-triage and follow only `references/execution.md` in complete mode.
+Load @bead-triage and follow only `references/execution.md` in complete mode. Resolve `references/execution.md` against the
+directory containing the loaded `SKILL.md`, never against a hardcoded home directory.
 Arguments: $ARGUMENTS
 Usage: `/bt_complete <bead/epic|all>`
+Direct equivalent: `bead-triage complete <bead/epic|all>`.
 Only the literal token `all` selects the whole repository.
 If the skill or reference cannot load, report the exact error and stop; never reconstruct from memory.

@@ -8,4 +8,4 @@ normative: true
 ref: ''
 reviewed: 4Imr5hBW6RyhVTMhJ1i88jaZqs_5_UPvpTxuPil9MCk=
 text: |
-  Verify the canonical skill layout, all seven command files, their one-mode reference mappings, and absence of agent, model, or subagent overrides.
+  Verify the canonical skill layout, direct mode routing, path-independent reference resolution, all seven OpenCode command files, their one-mode reference mappings, absence of agent, model, or subagent overrides, and absence of duplicated wrapper-skill trees.

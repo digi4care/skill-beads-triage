@@ -1,16 +1,20 @@
 # Reflect: analyse sessions, always propose first
 
-Procedure for `/bt_reflect [n]`.
+Procedure for reflect mode. Entry forms: `/bt_reflect [n]` or `bead-triage reflect [n]`.
 
 Reflect investigates sessions and proposes improvements. It never modifies beads, code, commands, agents, skills, prompts, permissions, or configuration.
 
 ## 1. Scope of the analysis
 
-The wrapper `/bt_reflect [n]` passes only the runtime arguments, never a leading `reflect` word. Validate the literal arguments before any further skill, tool, environment inspection, session discovery, or export. A supplied `0` is invalid input, not empty input.
+The runtime arguments are the tokens after the mode token. In the wrapper form `/bt_reflect [n]` the arguments are those
+after `/bt_reflect`; in the direct form `bead-triage reflect [n]` the leading `reflect` token is consumed as the mode
+token and is never part of the runtime arguments. Validate the literal arguments before any further skill, tool,
+environment inspection, session discovery, or export. A supplied `0` is invalid input, not empty input.
 
 - Empty arguments: investigate only the current session (`n = 1`).
 - A positive integer `n`: investigate the current session plus preceding top-level sessions from the current project, up to `n` sessions total.
-- Accepted forms: `/bt_reflect` (empty), `/bt_reflect 5`, `/bt_reflect #5`, `/bt_reflect 5 sessions`.
+- Accepted forms: `/bt_reflect` (empty), `/bt_reflect 5`, `/bt_reflect #5`, `/bt_reflect 5 sessions`, and the direct
+  equivalents `bead-triage reflect`, `bead-triage reflect 5`, `bead-triage reflect #5`, `bead-triage reflect 5 sessions`.
 - Trim surrounding whitespace, parse a leading `#` as decoration, and ignore a trailing `sessions` word. The remainder must match `[1-9][0-9]*`.
 - For `0`, a negative number, or malformed input, return only a short usage error listing the accepted forms. Do not load another skill, inspect the environment, discover sessions, export sessions, or change anything.
 - Do not analyse older sessions when no count is given.

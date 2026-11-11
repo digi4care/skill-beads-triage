@@ -8,14 +8,26 @@
  *   src/.agents/skills/bead-triage/   -> SKILL.md + references/
  *   src/.opencode/commands/           -> bt_*.md command templates
  *
- * Install targets:
- *   global:  <home>/.agents/skills/bead-triage/  +  <home>/.config/opencode/commands/
- *   project: <cwd>/.agents/skills/bead-triage/   +  <cwd>/.opencode/commands/
- *   custom:  <target>/.agents/skills/bead-triage/ + <target>/.opencode/commands/
+ * Every adapter installs the one canonical skill. Only the OpenCode adapter
+ * additionally installs the command templates.
+ *
+ * Harness adapters (declarative, see HARNESS_TABLE):
+ *   opencode  skill .agents/skills/bead-triage   commands .opencode/commands
+ *   claude    skill .claude/skills/bead-triage   (no commands)
+ *   codex     skill .agents/skills/bead-triage   (no commands)
+ *   pi        skill .agents/skills/bead-triage   (no commands)
+ *   agents    skill .agents/skills/bead-triage   (no commands)
+ *
+ * The global scope uses the same relative paths under the home directory; the
+ * OpenCode command directory is the documented global compatibility path
+ * <home>/.config/opencode/commands.
  *
  * Safety model:
  *   - One registry per scope root (.bt-triage-registry.json) tracks every file
- *     this installer wrote, together with its sha256 checksum.
+ *     this installer wrote, per harness, together with its sha256 checksum.
+ *   - Several harnesses share one destination (for example .agents/skills).
+ *     A file is owned by every harness that registered it and is only removed
+ *     after its last owner is gone.
  *   - Uninstall removes only registered files, and only when the file on disk is
  *     still byte-identical to the registered checksum. Modified files are kept.
  *   - Unregistered user files are never touched. No recursive directory deletion
@@ -95,7 +107,7 @@ export const packageJson = readPackageJson();
 export const packageName = packageJson.name;
 export const version = packageJson.version;
 
-/** Skill id; OpenCode derives the skill id from the directory name. */
+/** Skill id; every harness derives the skill id from the directory name. */
 export const SKILL_ID = "bead-triage";
 
 /** The seven command templates shipped by this package. */
@@ -111,7 +123,52 @@ export const REQUIRED_COMMANDS = [
 
 export const REGISTRY_FILENAME = ".bt-triage-registry.json";
 
-const GROUPS = ["skill", "commands"];
+/** Current registry schema version. */
+export const REGISTRY_SCHEMA_VERSION = 2;
+
+/**
+ * The declarative adapter table.
+ *
+ * `skill` is the path of the skill directory relative to the scope root.
+ * `commands` is the path of the command directory relative to the scope root,
+ * per scope kind; a harness without commands installs the skill only.
+ */
+export const HARNESS_TABLE = {
+  opencode: {
+    label: "OpenCode",
+    skill: [".agents", "skills", SKILL_ID],
+    commands: {
+      project: [".opencode", "commands"],
+      custom: [".opencode", "commands"],
+      global: [".config", "opencode", "commands"],
+    },
+  },
+  claude: {
+    label: "Claude Code",
+    skill: [".claude", "skills", SKILL_ID],
+  },
+  codex: {
+    label: "Codex CLI",
+    skill: [".agents", "skills", SKILL_ID],
+  },
+  pi: {
+    label: "Pi",
+    skill: [".agents", "skills", SKILL_ID],
+  },
+  agents: {
+    label: "Generic Agent Skills",
+    skill: [".agents", "skills", SKILL_ID],
+  },
+};
+
+/** All known harness ids, in a stable order. */
+export const HARNESS_IDS = Object.keys(HARNESS_TABLE);
+
+/** The harness used when no `--harness` flag is given. */
+export const DEFAULT_HARNESS = "opencode";
+
+/** The selection keyword that means "every known harness". */
+export const ALL_HARNESSES = "all";
 
 // ─── Small helpers ───────────────────────────────────────────────────────────
 
@@ -161,6 +218,68 @@ function pruneEmptyDirs(root, { removeRoot = false } = {}) {
   }
 }
 
+// ─── Harness adapters ────────────────────────────────────────────────────────
+
+/**
+ * The groups a harness installs: always the skill, plus commands for the
+ * harnesses that document a command directory.
+ */
+export function harnessGroups(harnessId) {
+  const def = HARNESS_TABLE[harnessId];
+  if (!def) throw new Error(`Unknown harness "${harnessId}"`);
+  const groups = ["skill"];
+  if (def.commands) groups.push("commands");
+  return groups;
+}
+
+/**
+ * The absolute destination directory of one group of one harness.
+ *
+ * The scope root is the home directory for the global scope, the working
+ * directory for the project scope and the target directory for a custom scope.
+ */
+export function harnessDest(scope, harnessId, group) {
+  const def = HARNESS_TABLE[harnessId];
+  if (!def) throw new Error(`Unknown harness "${harnessId}"`);
+  if (group === "skill") return join(scope.root, ...def.skill);
+  if (group === "commands") {
+    if (!def.commands) throw new Error(`Harness "${harnessId}" installs no command files`);
+    const rel = def.commands[scope.kind] ?? def.commands.project;
+    return join(scope.root, ...rel);
+  }
+  throw new Error(`Unknown group "${group}"`);
+}
+
+/**
+ * Resolve a `--harness` selection into a list of harness ids.
+ *
+ * Accepts a single harness id, the keyword "all" or a comma separated list.
+ * An unknown id is an error, so a typo never silently installs nothing.
+ */
+export function resolveHarnessSelection(selection) {
+  if (selection === undefined || selection === null || selection === true) {
+    return [DEFAULT_HARNESS];
+  }
+  const raw = Array.isArray(selection) ? selection : String(selection).split(",");
+  const out = [];
+  for (const item of raw) {
+    const name = String(item).trim().toLowerCase();
+    if (!name) continue;
+    if (name === ALL_HARNESSES) {
+      for (const id of HARNESS_IDS) if (!out.includes(id)) out.push(id);
+      continue;
+    }
+    if (!HARNESS_TABLE[name]) {
+      throw new Error(
+        `Unknown harness "${name}". Known harnesses: ${HARNESS_IDS.join(", ")}, ${ALL_HARNESSES}.`,
+      );
+    }
+    if (!out.includes(name)) out.push(name);
+  }
+  if (out.length === 0) return [DEFAULT_HARNESS];
+  return out;
+}
+
 // ─── Scope and source resolution ────────────────────────────────────────────
 
 /**
@@ -177,13 +296,15 @@ export function resolveScope({ scope = "project", target, home, cwd } = {}) {
   const cwdDir = resolve(cwd ?? process.cwd());
 
   if (scope === "global") {
+    const root = homeDir;
     return {
       kind: "global",
       label: "global",
-      root: homeDir,
-      skillDir: join(homeDir, ".agents", "skills", SKILL_ID),
-      commandsDir: join(homeDir, ".config", "opencode", "commands"),
-      registryPath: join(homeDir, REGISTRY_FILENAME),
+      root,
+      // Backwards compatible aliases: the OpenCode destinations.
+      skillDir: harnessDest({ kind: "global", root }, "opencode", "skill"),
+      commandsDir: harnessDest({ kind: "global", root }, "opencode", "commands"),
+      registryPath: join(root, REGISTRY_FILENAME),
     };
   }
   if (scope === "custom") {
@@ -193,18 +314,19 @@ export function resolveScope({ scope = "project", target, home, cwd } = {}) {
       kind: "custom",
       label: `custom (${root})`,
       root,
-      skillDir: join(root, ".agents", "skills", SKILL_ID),
-      commandsDir: join(root, ".opencode", "commands"),
+      skillDir: harnessDest({ kind: "custom", root }, "opencode", "skill"),
+      commandsDir: harnessDest({ kind: "custom", root }, "opencode", "commands"),
       registryPath: join(root, REGISTRY_FILENAME),
     };
   }
+  const root = cwdDir;
   return {
     kind: "project",
     label: "project",
-    root: cwdDir,
-    skillDir: join(cwdDir, ".agents", "skills", SKILL_ID),
-    commandsDir: join(cwdDir, ".opencode", "commands"),
-    registryPath: join(cwdDir, REGISTRY_FILENAME),
+    root,
+    skillDir: harnessDest({ kind: "project", root }, "opencode", "skill"),
+    commandsDir: harnessDest({ kind: "project", root }, "opencode", "commands"),
+    registryPath: join(root, REGISTRY_FILENAME),
   };
 }
 
@@ -219,10 +341,6 @@ export function resolveSource(sourceRoot) {
     skillDir: join(root, ".agents", "skills", SKILL_ID),
     commandsDir: join(root, ".opencode", "commands"),
   };
-}
-
-function scopeDestDir(scope, group) {
-  return group === "skill" ? scope.skillDir : scope.commandsDir;
 }
 
 function sourceDestDir(source, group) {
@@ -271,44 +389,146 @@ export function safeJoin(destDir, rel) {
   return dest;
 }
 
-export function loadRegistry(registryPath) {
-  if (!existsSync(registryPath)) return null;
-  try {
-    const data = JSON.parse(readFileSync(registryPath, "utf8"));
-    if (!data || typeof data !== "object" || !data.groups) {
-      return { corrupt: true, reason: "missing groups section" };
+function corrupt(reason) {
+  return { corrupt: true, reason };
+}
+
+/**
+ * Migrate a legacy (v1) registry object to the current schema.
+ *
+ * A v1 registry has no `schemaVersion` and holds a flat `groups` section with a
+ * skill group and a command group. Those files were only ever installed by the
+ * OpenCode adapter, so a v1 registry migrates transparently to an OpenCode
+ * owned v2 registry.
+ */
+export function migrateRegistry(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return corrupt("registry is not an object");
+  }
+  const version = data.schemaVersion ?? 1;
+  if (version === 1) {
+    if (!data.groups || typeof data.groups !== "object") {
+      return corrupt("missing groups section");
     }
-    for (const group of GROUPS) {
-      if (!data.groups[group] || !Array.isArray(data.groups[group].files)) {
-        data.groups[group] = { dest: "", files: [] };
+    const harnesses = {};
+    const groups = {};
+    for (const group of ["skill", "commands"]) {
+      const g = data.groups[group];
+      if (!g || typeof g !== "object") continue;
+      if (typeof g.dest !== "string" || g.dest.length === 0) {
+        return corrupt(`missing destination for group "${group}"`);
       }
-      for (const entry of data.groups[group].files) {
+      if (!Array.isArray(g.files)) {
+        return corrupt(`missing file list for group "${group}"`);
+      }
+      groups[group] = { dest: g.dest, files: g.files };
+    }
+    if (Object.keys(groups).length === 0) {
+      return corrupt("missing groups section");
+    }
+    harnesses.opencode = groups;
+    return {
+      schemaVersion: REGISTRY_SCHEMA_VERSION,
+      package: data.package ?? packageName,
+      version: data.version ?? version,
+      installedAt: data.installedAt ?? new Date().toISOString(),
+      scope: data.scope,
+      root: data.root,
+      harnesses,
+      migrated: true,
+    };
+  }
+  if (version !== REGISTRY_SCHEMA_VERSION) {
+    return corrupt(`unsupported registry schema version ${version}`);
+  }
+  if (!data.harnesses || typeof data.harnesses !== "object" || Array.isArray(data.harnesses)) {
+    return corrupt("missing harnesses section");
+  }
+  return { ...data, schemaVersion: REGISTRY_SCHEMA_VERSION, migrated: false };
+}
+
+/**
+ * Validate the structure of a v2 registry.
+ *
+ * Every check fails closed: an unknown harness, an unknown group, a missing
+ * destination, a missing file list, an unsafe path or a destination that does
+ * not match the documented adapter path makes the whole registry unusable.
+ */
+export function validateRegistry(registry, { scope } = {}) {
+  if (!registry || typeof registry !== "object") return corrupt("registry is not an object");
+  if (registry.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
+    return corrupt(`unsupported registry schema version ${registry.schemaVersion}`);
+  }
+  const harnesses = registry.harnesses;
+  if (!harnesses || typeof harnesses !== "object" || Array.isArray(harnesses)) {
+    return corrupt("missing harnesses section");
+  }
+  for (const [harnessId, groups] of Object.entries(harnesses)) {
+    if (!HARNESS_TABLE[harnessId]) {
+      return corrupt(`unknown harness in registry: ${JSON.stringify(harnessId)}`);
+    }
+    if (!groups || typeof groups !== "object" || Array.isArray(groups)) {
+      return corrupt(`malformed harness section: ${harnessId}`);
+    }
+    for (const [group, section] of Object.entries(groups)) {
+      if (group !== "skill" && group !== "commands") {
+        return corrupt(`unknown group in registry: ${JSON.stringify(group)}`);
+      }
+      if (!section || typeof section !== "object") {
+        return corrupt(`malformed group section: ${harnessId}/${group}`);
+      }
+      if (typeof section.dest !== "string" || section.dest.length === 0) {
+        return corrupt(`missing destination for group "${group}" of harness "${harnessId}"`);
+      }
+      if (!Array.isArray(section.files)) {
+        return corrupt(`missing file list for group "${group}" of harness "${harnessId}"`);
+      }
+      if (scope) {
+        let expected;
+        try {
+          expected = harnessDest(scope, harnessId, group);
+        } catch {
+          return corrupt(`harness "${harnessId}" does not install group "${group}"`);
+        }
+        if (resolve(section.dest) !== resolve(expected)) {
+          return corrupt(
+            `unexpected destination for ${harnessId}/${group}: ${section.dest} ` +
+              `(expected ${expected})`,
+          );
+        }
+      }
+      for (const entry of section.files) {
         if (!entry || typeof entry !== "object" || !isSafeRelativePath(entry.path)) {
           // Fail closed: a registry that points outside its scope is never used.
-          return {
-            corrupt: true,
-            reason:
-              `unsafe or malformed file path in group "${group}"` +
+          return corrupt(
+            `unsafe or malformed file path in group "${group}"` +
               (entry && typeof entry.path === "string" ? `: ${JSON.stringify(entry.path)}` : ""),
-          };
+          );
         }
       }
     }
-    return data;
-  } catch {
-    return { corrupt: true, reason: "not valid JSON" };
   }
+  return registry;
+}
+
+export function loadRegistry(registryPath, { scope } = {}) {
+  if (!existsSync(registryPath)) return null;
+  let data;
+  try {
+    data = JSON.parse(readFileSync(registryPath, "utf8"));
+  } catch {
+    return corrupt("not valid JSON");
+  }
+  const migrated = migrateRegistry(data);
+  if (migrated.corrupt) return migrated;
+  const validated = validateRegistry(migrated, { scope });
+  if (validated.corrupt) return validated;
+  return migrated;
 }
 
 function writeRegistry(registryPath, data) {
   mkdirSync(dirname(registryPath), { recursive: true });
   writeFileSync(registryPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-}
-
-function registryEntry(registry, group, rel) {
-  const files = registry?.groups?.[group]?.files;
-  if (!Array.isArray(files)) return undefined;
-  return files.find((f) => f && f.path === rel);
 }
 
 // ─── Source assets ──────────────────────────────────────────────────────────
@@ -339,88 +559,213 @@ export function collectSourceAssets(source, { requireAll = true } = {}) {
   return { skill, commands };
 }
 
+// ─── Ownership bookkeeping ───────────────────────────────────────────────────
+
+function ownershipKey(dest, rel) {
+  return `${dest}\u0000${rel}`;
+}
+
+function splitOwnershipKey(key) {
+  const index = key.indexOf("\u0000");
+  return [key.slice(0, index), key.slice(index + 1)];
+}
+
+/**
+ * Build the ownership map of a registry.
+ *
+ * The map is keyed by destination directory and relative path and holds the
+ * harnesses that registered the file, each with the checksum that was written.
+ * Several harnesses can own the same file; that is the normal case for the
+ * shared .agents skill directory.
+ */
+export function buildOwners(registry) {
+  const owners = new Map();
+  const harnesses = registry?.harnesses ?? {};
+  for (const [harnessId, groups] of Object.entries(harnesses)) {
+    for (const section of Object.values(groups ?? {})) {
+      for (const entry of section?.files ?? []) {
+        if (!entry || typeof entry.path !== "string") continue;
+        const key = ownershipKey(section.dest, entry.path);
+        if (!owners.has(key)) owners.set(key, new Map());
+        owners.get(key).set(harnessId, entry.sha256);
+      }
+    }
+  }
+  return owners;
+}
+
 // ─── Plan ────────────────────────────────────────────────────────────────────
 
 /**
- * Build a full plan for one scope. Pure: does not touch the filesystem.
+ * Build a full plan for one scope and a set of harnesses.
  *
- * @returns {{files: Array, stale: Array, problems: Array}}
+ * Pure: does not touch the filesystem.
+ *
+ * @returns {{files: Array, stale: Array, problems: Array, owners: Map}}
  */
-export function buildPlan({ scope, source, registry, force = false }) {
+export function buildPlan({ scope, source, registry, force = false, harnesses }) {
+  const selected = harnesses ?? [DEFAULT_HARNESS];
+  // A registry handed in by hand (or read from an older version) is normalized
+  // first, so a v1 registry is planned as an OpenCode owned installation.
+  const normalized = registry ? migrateRegistry(registry) : null;
+  const usable = normalized && !normalized.corrupt ? normalized : null;
+  const owners = buildOwners(usable);
+  const planned = new Map(); // key -> hash that will be on disk
   const assets = collectSourceAssets(source, { requireAll: false });
   const files = [];
 
-  for (const group of GROUPS) {
-    const destDir = scopeDestDir(scope, group);
-    const srcDir = sourceDestDir(source, group);
-    for (const rel of assets[group]) {
-      const src = join(srcDir, ...rel.split("/"));
-      const dest = join(destDir, ...rel.split("/"));
-      const srcHash = sha256(src);
-      const entry = registryEntry(registry, group, rel);
+  for (const harnessId of selected) {
+    for (const group of harnessGroups(harnessId)) {
+      const dest = harnessDest(scope, harnessId, group);
+      const srcDir = sourceDestDir(source, group);
+      for (const rel of assets[group] ?? []) {
+        const src = join(srcDir, ...rel.split("/"));
+        const destFile = join(dest, ...rel.split("/"));
+        const srcHash = sha256(src);
+        const key = ownershipKey(dest, rel);
+        const ownerMap = owners.get(key);
+        const registered = ownerMap && ownerMap.size > 0;
+        const recordedHashes = registered
+          ? [...ownerMap.values()].filter((value) => isValidSha256(value))
+          : [];
 
-      let action;
-      let reason;
-      if (!existsSync(dest)) {
-        action = "create";
-        reason = "not installed yet";
-      } else if (!entry) {
-        action = force ? "overwrite" : "conflict";
-        reason = force
-          ? "existing unregistered file, overwritten because --force was given"
-          : "existing unregistered file (not installed by this tool)";
-      } else {
-        const currentHash = sha256(dest);
-        if (currentHash !== entry.sha256) {
+        let onDiskHash = null;
+        if (planned.has(key)) {
+          onDiskHash = planned.get(key);
+        } else if (existsSync(destFile)) {
+          onDiskHash = sha256(destFile);
+        }
+
+        let action;
+        let reason;
+        if (onDiskHash === null) {
+          action = "create";
+          reason = "not installed yet";
+        } else if (!registered) {
+          action = force ? "overwrite" : "conflict";
+          reason = force
+            ? "existing unregistered file, overwritten because --force was given"
+            : "existing unregistered file (not installed by this tool)";
+        } else if (recordedHashes.length === 0) {
+          action = force ? "overwrite" : "modified";
+          reason = force
+            ? "no valid checksum in the registry, overwritten because --force was given"
+            : "no valid checksum in the registry, kept as is";
+        } else if (!recordedHashes.includes(onDiskHash)) {
           action = force ? "overwrite" : "modified";
           reason = force
             ? "locally modified file, overwritten because --force was given"
             : "locally modified file, kept as is";
-        } else if (currentHash === srcHash) {
+        } else if (onDiskHash === srcHash) {
           action = "unchanged";
           reason = "identical to the packaged version";
         } else {
           action = "update";
           reason = "newer packaged version available";
         }
+
+        files.push({
+          harness: harnessId,
+          group,
+          rel,
+          src,
+          dest,
+          destFile,
+          srcHash,
+          action,
+          reason,
+        });
+
+        // Ownership bookkeeping.
+        if (action === "create" || action === "update" || action === "overwrite") {
+          planned.set(key, srcHash);
+          if (!owners.has(key)) owners.set(key, new Map());
+          const map = owners.get(key);
+          for (const owner of [...map.keys()]) map.set(owner, srcHash);
+          map.set(harnessId, srcHash);
+        } else if (action === "unchanged") {
+          if (!owners.has(key)) owners.set(key, new Map());
+          const map = owners.get(key);
+          for (const owner of [...map.keys()]) map.set(owner, srcHash);
+          map.set(harnessId, srcHash);
+        } else if (action === "modified" && recordedHashes.length > 0) {
+          if (!owners.has(key)) owners.set(key, new Map());
+          const map = owners.get(key);
+          map.set(harnessId, recordedHashes[0]);
+        }
       }
-      files.push({ group, rel, src, dest, srcHash, action, reason });
     }
   }
 
   // Files registered previously that are no longer part of the package.
   const stale = [];
-  for (const group of GROUPS) {
-    const destDir = scopeDestDir(scope, group);
-    const known = registry?.groups?.[group]?.files ?? [];
-    for (const entry of known) {
-      if (!entry?.path) continue;
-      if (files.some((f) => f.group === group && f.rel === entry.path)) continue;
-      const dest = safeJoin(destDir, entry.path);
-      if (!dest) {
-        // Unreachable for a registry that passed loadRegistry, but the planner
-        // may be called with a hand-made registry.
-        stale.push({
-          group,
-          rel: entry.path,
-          dest: null,
-          action: "unsafe",
-          reason: "registry path escapes the destination directory, kept as is",
-        });
-        continue;
-      }
-      let action = "stale";
-      let reason = "no longer shipped by this package";
-      if (existsSync(dest)) {
-        if (!isValidSha256(entry.sha256)) {
-          action = "modified";
-          reason = "no valid checksum in the registry, kept as is";
-        } else if (sha256(dest) !== entry.sha256) {
-          action = "modified";
-          reason = "locally modified stale file, kept as is";
+  const registryHarnesses = usable?.harnesses ?? {};
+  const staleSeen = new Set();
+  for (const harnessId of Object.keys(registryHarnesses)) {
+    if (!selected.includes(harnessId)) continue;
+    const groups = registryHarnesses[harnessId] ?? {};
+    for (const [group, section] of Object.entries(groups)) {
+      const dest = section.dest;
+      const shipped = assets[group] ?? [];
+      for (const entry of section.files ?? []) {
+        if (!entry?.path) continue;
+        if (shipped.includes(entry.path)) continue;
+        const key = ownershipKey(dest, entry.path);
+        if (staleSeen.has(key)) {
+          // The same file is registered by several harnesses; report it once.
+          continue;
         }
+        const destFile = safeJoin(dest, entry.path);
+        if (!destFile) {
+          // Never touch a path that leaves the destination directory.
+          stale.push({
+            harness: harnessId,
+            group,
+            rel: entry.path,
+            dest: null,
+            action: "unsafe",
+            reason: "registry path escapes the destination directory, kept as is",
+          });
+          continue;
+        }
+        const map = owners.get(key);
+        // Owners outside this update keep the file alive.
+        const others = map
+          ? [...map.keys()].filter((owner) => owner !== harnessId && !selected.includes(owner))
+          : [];
+        if (others.length > 0) {
+          // The file is still owned by a harness outside this update: keep the
+          // file on disk, but drop the ownership of every harness we update.
+          for (const owner of selected) map.delete(owner);
+          staleSeen.add(key);
+          stale.push({
+            harness: harnessId,
+            group,
+            rel: entry.path,
+            dest: destFile,
+            action: "stale-shared",
+            reason: `still owned by ${others.join(", ")}, kept as is`,
+          });
+          continue;
+        }
+        let action = "stale";
+        let reason = "no longer shipped by this package";
+        if (existsSync(destFile)) {
+          if (!isValidSha256(entry.sha256)) {
+            action = "modified";
+            reason = "no valid checksum in the registry, kept as is";
+          } else if (sha256(destFile) !== entry.sha256) {
+            action = "modified";
+            reason = "locally modified stale file, kept as is";
+          }
+        }
+        if (action === "stale") {
+          // Every owner that this update touches loses the file together.
+          for (const owner of selected) map?.delete(owner);
+          staleSeen.add(key);
+        }
+        stale.push({ harness: harnessId, group, rel: entry.path, dest: destFile, action, reason });
       }
-      stale.push({ group, rel: entry.path, dest, action, reason });
     }
   }
 
@@ -429,22 +774,67 @@ export function buildPlan({ scope, source, registry, force = false }) {
     ...stale.filter((f) => f.action === "modified" || f.action === "unsafe"),
   ];
 
-  return { files, stale, problems };
+  return { files, stale, problems, owners };
 }
 
 // ─── Install / update ────────────────────────────────────────────────────────
 
 /**
- * Install or update the assets for one scope.
+ * Build the next registry from the ownership map.
+ *
+ * Every harness keeps its own entry list, so a shared file is registered once
+ * per owner with the same checksum.
+ */
+export function buildNextRegistry(scope, owners, previous) {
+  const harnesses = {};
+  const ids = new Set([
+    ...Object.keys(previous?.harnesses ?? {}),
+    ...[...owners.values()].flatMap((map) => [...map.keys()]),
+  ]);
+  for (const harnessId of [...ids].sort()) {
+    const groups = {};
+    for (const group of harnessGroups(harnessId)) {
+      const dest = harnessDest(scope, harnessId, group);
+      const files = [];
+      for (const [key, map] of owners) {
+        const [keyDest, rel] = splitOwnershipKey(key);
+        if (keyDest !== dest) continue;
+        if (!map.has(harnessId)) continue;
+        const checksum = map.get(harnessId);
+        files.push({
+          path: rel,
+          ...(isValidSha256(checksum) ? { sha256: checksum } : {}),
+        });
+      }
+      files.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      if (files.length > 0) groups[group] = { dest, files };
+    }
+    if (Object.keys(groups).length > 0) harnesses[harnessId] = groups;
+  }
+  return {
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
+    package: packageName,
+    version,
+    installedAt: new Date().toISOString(),
+    scope: scope.kind,
+    root: scope.root,
+    harnesses,
+  };
+}
+
+/**
+ * Install or update the assets of one scope for a set of harnesses.
  *
  * @param {object} options
  * @param {object} options.scope resolved scope
  * @param {object} options.source resolved source
+ * @param {string[]} [options.harnesses] harness ids to install
  * @param {boolean} [options.dryRun] compute the plan without writing anything
  * @param {boolean} [options.force] overwrite modified / unregistered files
  */
-export function installAssets({ scope, source, dryRun = false, force = false }) {
-  const registry = loadRegistry(scope.registryPath);
+export function installAssets({ scope, source, harnesses, dryRun = false, force = false }) {
+  const selected = harnesses ?? [DEFAULT_HARNESS];
+  const registry = loadRegistry(scope.registryPath, { scope });
   if (registry?.corrupt) {
     throw new Error(
       `Registry file is corrupt and cannot be trusted: ${scope.registryPath} ` +
@@ -452,30 +842,23 @@ export function installAssets({ scope, source, dryRun = false, force = false }) 
     );
   }
 
-  // A first install requires the complete package: the skill document and all
-  // seven command templates. Later updates tolerate a source where a command was
-  // dropped; that file is then retired from the installation.
-  const isFirstInstall = !registry;
-  collectSourceAssets(source, { requireAll: isFirstInstall });
+  // A first install requires the complete package: the skill document and, for
+  // the OpenCode adapter, all seven command templates. Later updates tolerate a
+  // source where a command was dropped; that file is then retired.
+  const installsCommands = selected.includes("opencode");
+  const isFirstInstall = !registry?.harnesses?.opencode?.commands;
+  if (installsCommands) {
+    collectSourceAssets(source, { requireAll: isFirstInstall });
+  } else {
+    collectSourceAssets(source, { requireAll: false });
+  }
 
-  const plan = buildPlan({ scope, source, registry, force });
+  const plan = buildPlan({ scope, source, registry, force, harnesses: selected });
   const written = [];
   const removed = [];
   const skipped = [];
 
   if (!dryRun) {
-    const nextRegistry = {
-      package: packageName,
-      version,
-      installedAt: new Date().toISOString(),
-      scope: scope.kind,
-      root: scope.root,
-      groups: {
-        skill: { dest: scope.skillDir, files: [] },
-        commands: { dest: scope.commandsDir, files: [] },
-      },
-    };
-
     for (const file of plan.files) {
       if (file.action === "conflict") {
         // Not ours: never register it, never touch it.
@@ -483,31 +866,25 @@ export function installAssets({ scope, source, dryRun = false, force = false }) 
         continue;
       }
       if (file.action === "modified") {
-        // Ours but locally edited: keep the file and keep its original checksum so
-        // uninstall still recognises it as user-modified and preserves it.
+        // Ours but locally edited: keep the file and keep the registered
+        // checksum so uninstall still recognises it as user-modified.
         skipped.push(file);
-        const entry = registryEntry(registry, file.group, file.rel);
-        if (entry) nextRegistry.groups[file.group].files.push(entry);
         continue;
       }
       if (file.action !== "unchanged") {
-        mkdirSync(dirname(file.dest), { recursive: true });
-        copyFileSync(file.src, file.dest);
+        mkdirSync(dirname(file.destFile), { recursive: true });
+        copyFileSync(file.src, file.destFile);
         written.push(file);
       }
-      nextRegistry.groups[file.group].files.push({ path: file.rel, sha256: file.srcHash });
     }
 
     for (const file of plan.stale) {
-      const entry = registryEntry(registry, file.group, file.rel);
-      if (file.action === "unsafe") {
-        // Never touch a path that leaves the destination directory.
+      if (file.action === "unsafe" || file.action === "stale-shared") {
         skipped.push(file);
         continue;
       }
       if (file.action === "modified") {
         skipped.push(file);
-        if (entry) nextRegistry.groups[file.group].files.push(entry);
         continue;
       }
       if (file.dest && existsSync(file.dest)) {
@@ -516,7 +893,8 @@ export function installAssets({ scope, source, dryRun = false, force = false }) 
       }
     }
 
-    writeRegistry(scope.registryPath, nextRegistry);
+    const next = buildNextRegistry(scope, plan.owners, registry);
+    writeRegistry(scope.registryPath, next);
   } else {
     for (const file of plan.files) {
       if (file.action === "conflict" || file.action === "modified") {
@@ -526,23 +904,49 @@ export function installAssets({ scope, source, dryRun = false, force = false }) 
       if (file.action !== "unchanged") written.push(file);
     }
     for (const file of plan.stale) {
-      if (file.action === "modified") skipped.push(file);
+      if (file.action === "modified" || file.action === "unsafe") skipped.push(file);
+      else if (file.action === "stale-shared") skipped.push(file);
       else removed.push(file);
     }
   }
 
-  return { scope, plan, written, removed, skipped, dryRun };
+  return { scope, plan, written, removed, skipped, dryRun, harnesses: selected };
 }
 
 // ─── Uninstall ───────────────────────────────────────────────────────────────
 
 /**
- * Uninstall the assets of one scope. Only registered, unmodified files are removed.
+ * Uninstall the assets of one scope for a set of harnesses.
+ *
+ * Only registered, unmodified files are removed. A file that is still owned by
+ * another harness stays on disk until its last owner is removed.
  */
-export function uninstallAssets({ scope, dryRun = false }) {
-  const registry = loadRegistry(scope.registryPath);
+/**
+ * Drop every owner that this uninstall touches from an ownership map.
+ *
+ * A shared file is one entry in the map with one owner per harness. When a set
+ * of harnesses is uninstalled together, all of them lose the file at once, so
+ * the last owner can remove it from disk.
+ */
+function dropOwners(map, selected) {
+  if (!map) return;
+  for (const owner of selected) map.delete(owner);
+}
+
+export function uninstallAssets({ scope, harnesses, dryRun = false }) {
+  const selected = harnesses ?? [DEFAULT_HARNESS];
+  const registry = loadRegistry(scope.registryPath, { scope });
   if (!registry) {
-    return { scope, registry: null, removed: [], kept: [], missing: [], dryRun, nothing: true };
+    return {
+      scope,
+      registry: null,
+      removed: [],
+      kept: [],
+      missing: [],
+      dryRun,
+      nothing: true,
+      harnesses: selected,
+    };
   }
   if (registry.corrupt) {
     throw new Error(
@@ -551,80 +955,113 @@ export function uninstallAssets({ scope, dryRun = false }) {
     );
   }
 
+  const owners = buildOwners(registry);
   const removed = [];
   const kept = [];
   const missing = [];
+  // Files that this run already handled. A shared file is removed once, by the
+  // last owner that this uninstall touches.
+  const handled = new Set();
 
-  for (const group of GROUPS) {
-    const destDir = scopeDestDir(scope, group);
-    for (const entry of registry.groups[group].files ?? []) {
-      if (!entry?.path) continue;
-      const dest = safeJoin(destDir, entry.path);
-      if (!dest) {
-        kept.push({
-          group,
-          path: entry.path,
-          dest: null,
-          reason: "registry path escapes the destination directory, kept as is",
-        });
-        continue;
+  for (const harnessId of selected) {
+    const groups = registry.harnesses?.[harnessId];
+    if (!groups) continue;
+    for (const [group, section] of Object.entries(groups)) {
+      for (const entry of section.files ?? []) {
+        if (!entry?.path) continue;
+        const destFile = safeJoin(section.dest, entry.path);
+        if (!destFile) {
+          kept.push({
+            harness: harnessId,
+            group,
+            path: entry.path,
+            dest: null,
+            reason: "registry path escapes the destination directory, kept as is",
+          });
+          continue;
+        }
+        const key = ownershipKey(section.dest, entry.path);
+        if (handled.has(key)) continue;
+        const map = owners.get(key);
+        // Owners that this uninstall does not touch keep the file alive.
+        const others = map
+          ? [...map.keys()].filter((owner) => owner !== harnessId && !selected.includes(owner))
+          : [];
+        if (others.length > 0) {
+          // Still owned by another harness: keep the file, drop only this owner.
+          map.delete(harnessId);
+          kept.push({
+            harness: harnessId,
+            group,
+            path: entry.path,
+            dest: destFile,
+            reason: `still owned by ${others.join(", ")}, kept as is`,
+          });
+          continue;
+        }
+        if (!existsSync(destFile)) {
+          handled.add(key);
+          missing.push({ harness: harnessId, group, path: entry.path, dest: destFile });
+          dropOwners(map, selected);
+          continue;
+        }
+        if (!isValidSha256(entry.sha256)) {
+          // Without a trustworthy checksum the file cannot be proven to be ours.
+          kept.push({
+            harness: harnessId,
+            group,
+            path: entry.path,
+            dest: destFile,
+            reason: "no valid checksum in the registry, kept as is",
+          });
+          continue;
+        }
+        if (sha256(destFile) !== entry.sha256) {
+          kept.push({
+            harness: harnessId,
+            group,
+            path: entry.path,
+            dest: destFile,
+            reason: "modified since installation",
+          });
+          continue;
+        }
+        if (!dryRun) rmSync(destFile, { force: true });
+        dropOwners(map, selected);
+        handled.add(key);
+        removed.push({ harness: harnessId, group, path: entry.path, dest: destFile });
       }
-      if (!existsSync(dest)) {
-        missing.push({ group, path: entry.path, dest });
-        continue;
-      }
-      if (!isValidSha256(entry.sha256)) {
-        // Without a trustworthy checksum the file cannot be proven to be ours.
-        kept.push({
-          group,
-          path: entry.path,
-          dest,
-          reason: "no valid checksum in the registry, kept as is",
-        });
-        continue;
-      }
-      if (sha256(dest) !== entry.sha256) {
-        kept.push({ group, path: entry.path, dest, reason: "modified since installation" });
-        continue;
-      }
-      if (!dryRun) rmSync(dest, { force: true });
-      removed.push({ group, path: entry.path, dest });
     }
   }
 
   if (!dryRun) {
     // Prune empty directories only. rmdirSync refuses to remove a directory
     // that still holds files, so unrelated user content always survives.
-    pruneEmptyDirs(scope.skillDir, { removeRoot: true });
-    // The commands directory may be shared with other OpenCode commands, so its
-    // root is kept; only empty subdirectories are pruned.
-    pruneEmptyDirs(scope.commandsDir, { removeRoot: false });
-    if (kept.length === 0) {
+    for (const harnessId of selected) {
+      for (const group of harnessGroups(harnessId)) {
+        const dest = harnessDest(scope, harnessId, group);
+        // The command directory may be shared with other commands, so its root
+        // is kept; only empty subdirectories are pruned. The skill directory is
+        // owned by this tool and is removed when it is empty.
+        pruneEmptyDirs(dest, { removeRoot: group === "skill" });
+      }
+    }
+
+    const next = buildNextRegistry(scope, owners, registry);
+    const hasEntries = Object.values(next.harnesses).some((groups) =>
+      Object.values(groups).some((section) => section.files.length > 0),
+    );
+    if (!hasEntries) {
       // Nothing was preserved, so the registry is obsolete.
       if (existsSync(scope.registryPath)) rmSync(scope.registryPath, { force: true });
     } else {
-      // Keep the registry with only the preserved files, so a later uninstall can
-      // still recognise them as user-owned.
-      const next = {
-        package: registry.package ?? packageName,
-        version: registry.version ?? version,
-        installedAt: registry.installedAt ?? new Date().toISOString(),
-        scope: scope.kind,
-        root: scope.root,
-        groups: {
-          skill: { dest: scope.skillDir, files: [] },
-          commands: { dest: scope.commandsDir, files: [] },
-        },
-      };
-      for (const file of kept) {
-        const entry = registryEntry(registry, file.group, file.path);
-        if (entry) next.groups[file.group].files.push(entry);
-      }
+      // Keep the registry with only the preserved files, so a later uninstall
+      // can still recognise them as user-owned.
       writeRegistry(scope.registryPath, next);
     }
   }
 
-  return { scope, registry, removed, kept, missing, dryRun, nothing: false };
+  return { scope, registry, removed, kept, missing, dryRun, nothing: false, harnesses: selected };
 }
 
 // ─── Introspection ───────────────────────────────────────────────────────────
@@ -633,7 +1070,7 @@ export function uninstallAssets({ scope, dryRun = false }) {
 export function knownScopes({ home, cwd } = {}) {
   const scopes = [resolveScope({ scope: "global", home }), resolveScope({ scope: "project", cwd })];
   for (const scope of scopes) {
-    scope.registry = loadRegistry(scope.registryPath);
+    scope.registry = loadRegistry(scope.registryPath, { scope });
   }
   return scopes;
 }
@@ -643,54 +1080,82 @@ export function findInstallations({ home, cwd, target } = {}) {
   const scopes = knownScopes({ home, cwd });
   if (target) {
     const custom = resolveScope({ scope: "custom", target });
-    custom.registry = loadRegistry(custom.registryPath);
+    custom.registry = loadRegistry(custom.registryPath, { scope: custom });
     scopes.push(custom);
   }
   return scopes.filter((s) => s.registry);
 }
 
-/** Diagnostics for a single scope. */
+/** Diagnostics for a single scope, per harness and group. */
 export function inspectScope(scope) {
-  const registry = loadRegistry(scope.registryPath);
+  const registry = loadRegistry(scope.registryPath, { scope });
   const issues = [];
-  const groups = {};
-  for (const group of GROUPS) {
-    const destDir = scopeDestDir(scope, group);
-    const entries = registry?.groups?.[group]?.files ?? [];
-    const present = [];
-    const absent = [];
-    const modified = [];
-    const unverifiable = [];
-    for (const entry of entries) {
-      const dest = safeJoin(destDir, entry.path);
-      if (!dest) {
-        issues.push(`unsafe ${group} path in registry: ${entry.path}`);
-        continue;
+  // Structured issues next to the human readable strings, so callers can
+  // filter by harness without matching on message text.
+  const issueDetails = [];
+  const harnesses = {};
+  const addIssue = (harnessId, group, kind, path, message) => {
+    issues.push(message);
+    issueDetails.push({ harness: harnessId, group, kind, path, message });
+  };
+  for (const [harnessId, groups] of Object.entries(registry?.harnesses ?? {})) {
+    const harnessReport = {};
+    for (const [group, section] of Object.entries(groups ?? {})) {
+      const entries = section.files ?? [];
+      const present = [];
+      const absent = [];
+      const modified = [];
+      const unverifiable = [];
+      for (const entry of entries) {
+        const dest = safeJoin(section.dest, entry.path);
+        if (!dest) {
+          addIssue(
+            harnessId,
+            group,
+            "unsafe",
+            entry.path,
+            `unsafe ${harnessId} ${group} path in registry: ${entry.path}`,
+          );
+          continue;
+        }
+        if (!existsSync(dest)) {
+          absent.push(entry.path);
+          continue;
+        }
+        if (!isValidSha256(entry.sha256)) {
+          unverifiable.push(entry.path);
+          continue;
+        }
+        if (sha256(dest) !== entry.sha256) modified.push(entry.path);
+        else present.push(entry.path);
       }
-      if (!existsSync(dest)) {
-        absent.push(entry.path);
-        continue;
+      harnessReport[group] = {
+        dest: section.dest,
+        present,
+        absent,
+        modified,
+        unverifiable,
+        total: entries.length,
+      };
+      for (const p of absent) {
+        addIssue(harnessId, group, "missing", p, `missing ${harnessId} ${group} file: ${p}`);
       }
-      if (!isValidSha256(entry.sha256)) {
-        unverifiable.push(entry.path);
-        continue;
+      for (const p of modified) {
+        addIssue(harnessId, group, "modified", p, `modified ${harnessId} ${group} file: ${p}`);
       }
-      if (sha256(dest) !== entry.sha256) modified.push(entry.path);
-      else present.push(entry.path);
+      for (const p of unverifiable) {
+        addIssue(
+          harnessId,
+          group,
+          "unverifiable",
+          p,
+          `unverifiable ${harnessId} ${group} file (no checksum): ${p}`,
+        );
+      }
     }
-    groups[group] = {
-      dest: destDir,
-      present,
-      absent,
-      modified,
-      unverifiable,
-      total: entries.length,
-    };
-    for (const p of absent) issues.push(`missing ${group} file: ${p}`);
-    for (const p of modified) issues.push(`modified ${group} file: ${p}`);
-    for (const p of unverifiable) issues.push(`unverifiable ${group} file (no checksum): ${p}`);
+    harnesses[harnessId] = harnessReport;
   }
-  return { scope, registry, groups, issues };
+  return { scope, registry, harnesses, issues, issueDetails };
 }
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -750,10 +1215,19 @@ function cliContext(flags) {
   };
 }
 
+function harnessSelectionFromFlags(flags) {
+  return resolveHarnessSelection(flags.harness);
+}
+
 function printPlan(result) {
   const { plan, written, removed, skipped, dryRun } = result;
   const prefix = dryRun ? "[dry-run] " : "";
+  let currentHarness = null;
   for (const file of plan.files) {
+    if (file.harness !== currentHarness) {
+      currentHarness = file.harness;
+      out(`  harness: ${currentHarness}`);
+    }
     const symbol =
       file.action === "conflict" || file.action === "modified"
         ? SYMBOL.warn
@@ -767,7 +1241,10 @@ function printPlan(result) {
     );
   }
   for (const file of plan.stale) {
-    out(`  ${SYMBOL.warn} stale    ${file.group}/${file.rel} -> ${file.dest} (${file.reason})`);
+    out(
+      `  ${SYMBOL.warn} stale    ${file.harness} ${file.group}/${file.rel} -> ${file.dest} ` +
+        `(${file.reason})`,
+    );
   }
   out("");
   out(
@@ -777,13 +1254,15 @@ function printPlan(result) {
 }
 
 function printHelp() {
-  out(`bt-triage v${version} - installer for the bead-triage skill and /bt_* OpenCode commands`);
+  out(
+    `bt-triage v${version} - installer for the bead-triage skill and the /bt_* OpenCode commands`,
+  );
   out("");
   out("Usage:");
   out("  bt-triage <command> [options]");
   out("");
   out("Commands:");
-  out("  install      Install the skill and the seven bt_* commands into a scope");
+  out("  install      Install the skill into a scope for the selected harness(es)");
   out("  update       Re-install from the packaged sources and refresh registered files");
   out("  uninstall    Remove the files this tool registered in a scope");
   out("  list         List the installations found in the global and project scope");
@@ -796,6 +1275,14 @@ function printHelp() {
   out("  --project            Use the project scope (default)");
   out("  --target <path>      Use a custom scope rooted at <path>");
   out("");
+  out("Harness options:");
+  out(`  --harness <name>     Install, update or uninstall one harness adapter.`);
+  out(`                       Known harnesses: ${HARNESS_IDS.join(", ")}.`);
+  out("                       Default for install, update and uninstall: opencode.");
+  out(`  --harness all        Use every known harness adapter.`);
+  out("                       For list, info and doctor, --harness filters the");
+  out("                       reported adapters; without it all adapters are reported.");
+  out("");
   out("Common options:");
   out("  --dry-run            Report what would change, without touching any file");
   out("  --force              Overwrite modified or unregistered files");
@@ -803,45 +1290,80 @@ function printHelp() {
   out("  --home <path>        Override the home directory (default: $HOME)");
   out("  --cwd <path>         Override the project directory (default: current directory)");
   out("");
+  out("Harness adapters (every adapter installs the same canonical skill):");
+  out("  Adapters that share a destination (opencode, codex, pi, agents) own the");
+  out("  shared files together; a shared file is removed only when its last");
+  out("  owner is uninstalled.");
+  out("  opencode  .agents/skills/bead-triage  +  .opencode/commands (global:");
+  out("                                                     .config/opencode/commands)");
+  out("  claude    .claude/skills/bead-triage");
+  out("  codex     .agents/skills/bead-triage");
+  out("  pi        .agents/skills/bead-triage");
+  out("  agents    .agents/skills/bead-triage");
+  out("  Only the opencode adapter installs the /bt_* command files; the other");
+  out("  adapters install the skill only.");
+  out("");
   out("Global scope:");
   out("  <home>/.agents/skills/bead-triage/");
+  out("  <home>/.claude/skills/bead-triage/");
   out("  <home>/.config/opencode/commands/");
   out("");
   out("Project and custom scopes:");
   out("  <root>/.agents/skills/bead-triage/");
+  out("  <root>/.claude/skills/bead-triage/");
   out("  <root>/.opencode/commands/");
   out("");
   out("Exit code 1 means the command reported unresolved collisions or modified files.");
+  out("For info and doctor it means a visible installation has a problem: a corrupt");
+  out("registry, a missing, modified or unverifiable file. A --harness filter");
+  out("limits that check to the selected adapters.");
 }
 
 function cmdInstall(flags, { update = false } = {}) {
   const ctx = cliContext(flags);
   const scope = resolveScope({ ...scopeFromFlags(flags), home: ctx.home, cwd: ctx.cwd });
   const source = resolveSource(ctx.sourceRoot);
+  const harnesses = harnessSelectionFromFlags(flags);
 
   out("");
   out(`${update ? "Update" : "Install"} -> ${scope.kind} scope`);
-  out(`  root:    ${scope.root}`);
-  out(`  skill:   ${scope.skillDir}`);
-  out(`  commands: ${scope.commandsDir}`);
+  out(`  root:     ${scope.root}`);
+  out(`  harness:  ${harnesses.join(", ")}`);
+  for (const harnessId of harnesses) {
+    for (const group of harnessGroups(harnessId)) {
+      out(`  ${harnessId} ${group}: ${harnessDest(scope, harnessId, group)}`);
+    }
+  }
   out("");
 
   const result = installAssets({
     scope,
     source,
+    harnesses,
     dryRun: !!flags["dry-run"],
     force: !!flags.force,
   });
   printPlan(result);
 
+  // Only genuine problems (collisions, modified files, unsafe paths) fail the
+  // command. A stale file that is kept because another harness still owns it is
+  // a normal, safe outcome and must not demand --force.
+  const problems = result.plan?.problems ?? [];
+  if (problems.length > 0) {
+    out("");
+    out(
+      `  ${SYMBOL.warn} ${problems.length} file(s) need attention: ` +
+        "modified or unregistered files were kept.",
+    );
+    out("    Re-run with --force to overwrite them, or inspect them first.");
+    return 1;
+  }
   if (result.skipped.length > 0) {
     out("");
     out(
-      `  ${SYMBOL.warn} ${result.skipped.length} file(s) need attention: ` +
-        "modified or unregistered files were kept.",
+      `  ${SYMBOL.info} ${result.skipped.length} file(s) kept as is: ` +
+        "still owned by another harness, or modified after installation.",
     );
-    out(`    Re-run with --force to overwrite them, or inspect them first.`);
-    return 1;
   }
   out("");
   if (flags["dry-run"]) {
@@ -855,26 +1377,28 @@ function cmdInstall(flags, { update = false } = {}) {
 function cmdUninstall(flags) {
   const ctx = cliContext(flags);
   const scope = resolveScope({ ...scopeFromFlags(flags), home: ctx.home, cwd: ctx.cwd });
+  const harnesses = harnessSelectionFromFlags(flags);
 
   out("");
   out(`Uninstall <- ${scope.kind} scope`);
-  out(`  root: ${scope.root}`);
+  out(`  root:    ${scope.root}`);
+  out(`  harness: ${harnesses.join(", ")}`);
   out("");
 
-  const result = uninstallAssets({ scope, dryRun: !!flags["dry-run"] });
+  const result = uninstallAssets({ scope, harnesses, dryRun: !!flags["dry-run"] });
   if (result.nothing) {
     out(`  ${SYMBOL.warn} No installation found at ${scope.registryPath}`);
     return 0;
   }
   for (const file of result.removed) {
     const verb = flags["dry-run"] ? "would remove" : "removed";
-    out(`  ${SYMBOL.ok} ${verb}  ${file.group}/${file.path}`);
+    out(`  ${SYMBOL.ok} ${verb}  ${file.harness} ${file.group}/${file.path}`);
   }
   for (const file of result.kept) {
-    out(`  ${SYMBOL.warn} kept    ${file.group}/${file.path} (${file.reason})`);
+    out(`  ${SYMBOL.warn} kept    ${file.harness} ${file.group}/${file.path} (${file.reason})`);
   }
   for (const file of result.missing) {
-    out(`  ${SYMBOL.info} missing ${file.group}/${file.path}`);
+    out(`  ${SYMBOL.info} missing ${file.harness} ${file.group}/${file.path}`);
   }
   out("");
   const removedLabel = result.kept.length > 0 ? SYMBOL.warn : SYMBOL.ok;
@@ -895,6 +1419,7 @@ function cmdUninstall(flags) {
 function cmdList(flags) {
   const ctx = cliContext(flags);
   const scopes = findInstallations({ home: ctx.home, cwd: ctx.cwd, target: flags.target });
+  const selected = flags.harness ? harnessSelectionFromFlags(flags) : null;
   out("");
   const found = scopes.filter((s) => s.registry && !s.registry.corrupt);
   for (const scope of scopes) {
@@ -912,15 +1437,17 @@ function cmdList(flags) {
   }
   for (const scope of found) {
     const reg = scope.registry;
-    const skillCount = reg.groups.skill.files.length;
-    const commandCount = reg.groups.commands.files.length;
-    out(
-      `  ${SYMBOL.ok} ${scope.kind.padEnd(8)} v${reg.version}  ` +
-        `${skillCount} skill file(s), ${commandCount} command file(s)`,
-    );
-    out(`      root:     ${scope.root}`);
-    out(`      skill:    ${scope.skillDir}`);
-    out(`      commands: ${scope.commandsDir}`);
+    out(`  ${SYMBOL.ok} ${scope.kind.padEnd(8)} v${reg.version}  root: ${scope.root}`);
+    for (const [harnessId, groups] of Object.entries(reg.harnesses ?? {})) {
+      if (selected && !selected.includes(harnessId)) continue;
+      const skillCount = groups.skill?.files.length ?? 0;
+      const commandCount = groups.commands?.files.length ?? 0;
+      const commandText = commandCount > 0 ? `, ${commandCount} command file(s)` : "";
+      out(`      ${harnessId.padEnd(8)} ${skillCount} skill file(s)${commandText}`);
+      for (const group of Object.keys(groups)) {
+        out(`               ${group}: ${groups[group].dest}`);
+      }
+    }
   }
   return 0;
 }
@@ -936,6 +1463,7 @@ function cmdInfo(flags, positional) {
   } else {
     scope = resolveScope({ scope: "custom", target: scopeArg, home: ctx.home });
   }
+  const selected = flags.harness ? harnessSelectionFromFlags(flags) : null;
   const info = inspectScope(scope);
   out("");
   out(`  Scope: ${scope.kind} (${scope.root})`);
@@ -948,19 +1476,26 @@ function cmdInfo(flags, positional) {
       `  ${SYMBOL.bad} Registry is corrupt and was refused: ${scope.registryPath} ` +
         `(${info.registry.reason ?? "unreadable"})`,
     );
-    out(`    Inspect it and remove it manually before reinstalling.`);
+    out("    Inspect it and remove it manually before reinstalling.");
     return 1;
   }
   out(`  Package: ${info.registry.package} v${info.registry.version}`);
   out(`  Installed at: ${info.registry.installedAt}`);
-  for (const group of GROUPS) {
-    const g = info.groups[group];
-    out(`  ${group}: ${g.present.length}/${g.total} file(s) intact at ${g.dest}`);
-    for (const p of g.absent) out(`    ${SYMBOL.bad} missing ${p}`);
-    for (const p of g.modified) out(`    ${SYMBOL.warn} modified ${p}`);
-    for (const p of g.unverifiable) out(`    ${SYMBOL.warn} unverifiable ${p} (no checksum)`);
+  const visible = new Set(selected ?? Object.keys(info.harnesses));
+  for (const [harnessId, groups] of Object.entries(info.harnesses)) {
+    if (!visible.has(harnessId)) continue;
+    out(`  Harness: ${harnessId}`);
+    for (const [group, g] of Object.entries(groups)) {
+      out(`    ${group}: ${g.present.length}/${g.total} file(s) intact at ${g.dest}`);
+      for (const p of g.absent) out(`      ${SYMBOL.bad} missing ${p}`);
+      for (const p of g.modified) out(`      ${SYMBOL.warn} modified ${p}`);
+      for (const p of g.unverifiable) out(`      ${SYMBOL.warn} unverifiable ${p} (no checksum)`);
+    }
   }
-  return info.issues.length > 0 ? 1 : 0;
+  // Only issues of the visible adapters count; a filter must not inherit the
+  // problems of an adapter that was excluded.
+  const visibleIssues = info.issueDetails.filter((issue) => visible.has(issue.harness));
+  return visibleIssues.length > 0 ? 1 : 0;
 }
 
 function cmdDoctor(flags) {
@@ -991,25 +1526,45 @@ function cmdDoctor(flags) {
   out("");
   out("Installations:");
   const scopes = knownScopes({ home: ctx.home, cwd: ctx.cwd });
+  const selected = flags.harness ? harnessSelectionFromFlags(flags) : null;
   let any = false;
+  let corruptRegistry = false;
+  let integrityIssues = 0;
   for (const scope of scopes) {
     if (!scope.registry) continue;
     any = true;
     if (scope.registry.corrupt) {
+      // A corrupt registry is a failure of the installation itself, whatever
+      // adapter is selected: the state on disk cannot be trusted.
+      corruptRegistry = true;
       out(`  ${SYMBOL.bad} ${scope.kind}: ${scope.root}`);
       out(`    ${SYMBOL.bad} registry refused: ${scope.registry.reason ?? "unreadable"}`);
       continue;
     }
     const info = inspectScope(scope);
-    out(`  ${info.issues.length === 0 ? SYMBOL.ok : SYMBOL.warn} ${scope.kind}: ${scope.root}`);
-    for (const issue of info.issues) out(`    ${SYMBOL.warn} ${issue}`);
+    const visibleHarnesses = Object.entries(info.harnesses).filter(
+      ([harnessId]) => !selected || selected.includes(harnessId),
+    );
+    const visibleIssues = info.issueDetails.filter(
+      (issue) => !selected || selected.includes(issue.harness),
+    );
+    integrityIssues += visibleIssues.length;
+    out(`  ${visibleIssues.length === 0 ? SYMBOL.ok : SYMBOL.warn} ${scope.kind}: ${scope.root}`);
+    for (const [harnessId, groups] of visibleHarnesses) {
+      for (const [group, g] of Object.entries(groups)) {
+        out(`    ${harnessId} ${group}: ${g.present.length}/${g.total} file(s) at ${g.dest}`);
+      }
+    }
+    for (const issue of visibleIssues) out(`    ${SYMBOL.warn} ${issue.message}`);
   }
   if (!any) out("  none found");
   const missingCommandsAny = missingCommands.length > 0;
   out("");
   // A broken package source is a failure: the skill document and all seven
-  // commands must be present before the package can be installed.
-  return missingCommandsAny || !skillOk ? 1 : 0;
+  // commands must be present before the package can be installed. A corrupt
+  // registry or a visible installation integrity problem (a missing SKILL.md,
+  // a modified or unverifiable file) is a failure too.
+  return missingCommandsAny || !skillOk || corruptRegistry || integrityIssues > 0 ? 1 : 0;
 }
 
 export function runCli(argv = process.argv.slice(2)) {

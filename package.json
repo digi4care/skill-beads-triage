@@ -1,7 +1,7 @@
 {
   "name": "@digi4care/skill-beads-triage",
   "version": "0.1.0",
-  "description": "OpenCode skill and commands for beads_rust issue triage with optional Doorstop traceability.",
+  "description": "Portable bead-triage Agent Skill with safe adapters for OpenCode, Claude Code, Codex, Pi, and compatible harnesses.",
   "type": "module",
   "bin": {
     "bt-triage": "./bin/bt-triage.js"
@@ -29,7 +29,11 @@
     "prepublishOnly": "npm run validate"
   },
   "keywords": [
+    "agent-skills",
     "opencode",
+    "claude-code",
+    "codex",
+    "pi",
     "beads",
     "beads-rust",
     "doorstop",

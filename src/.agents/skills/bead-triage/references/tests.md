@@ -1,6 +1,9 @@
 # Tests: dedicated verification mode
 
-Procedure for `/bt_tests [scope]`. Run and audit relevant tests for a scope; do not change production code, claim or close beads, or continue into the general work loop unless the user separately requests that work.
+Procedure for tests mode. Entry forms: `/bt_tests [scope]` and `bead-triage tests [scope]`. In the direct form the
+leading `tests` token is consumed and the remaining tokens are the runtime arguments. Run and audit relevant tests for a
+scope; do not change production code, claim or close beads, or continue into the general work loop unless the user
+separately requests that work.
 
 ## 1. Select the scope
 

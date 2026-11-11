@@ -8,6 +8,17 @@ changes; patch releases remain backwards compatible.
 
 ## [Unreleased]
 
+### Added
+
+- Direct `<mode> [arguments]` routing in the canonical skill for native Agent Skills invocation.
+- Declarative adapters for OpenCode, Claude Code, Codex CLI, Pi, and documented `.agents/skills/` consumers, plus `all` selection.
+- Registry v2 with per-harness ownership, OpenCode v1 migration, and safe shared-file lifecycle handling.
+
+### Changed
+
+- Compatibility documentation now distinguishes exact harness paths and invocation syntax from generic installation support and unverified runtime behavior.
+- OpenCode command wrappers remain available while other adapters reuse the canonical skill without duplicated wrapper skills.
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

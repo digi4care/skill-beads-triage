@@ -89,8 +89,9 @@ describe("install", () => {
 
     const registry = loadRegistry(scope.registryPath);
     assert.ok(registry, "registry should exist");
-    assert.equal(registry.groups.skill.files.length, 8);
-    assert.equal(registry.groups.commands.files.length, 7);
+    assert.equal(registry.schemaVersion, 2);
+    assert.equal(registry.harnesses.opencode.skill.files.length, 8);
+    assert.equal(registry.harnesses.opencode.commands.files.length, 7);
   });
 
   it("installs into the global scope", () => {
@@ -279,8 +280,8 @@ describe("uninstall", () => {
     assert.equal(existsSync(join(scope.commandsDir, "bt_status.md")), false);
     assert.ok(existsSync(scope.registryPath), "registry must survive for kept files");
     const registry = loadRegistry(scope.registryPath);
-    assert.equal(registry.groups.skill.files.length, 1);
-    assert.equal(registry.groups.skill.files[0].path, "SKILL.md");
+    assert.equal(registry.harnesses.opencode.skill.files.length, 1);
+    assert.equal(registry.harnesses.opencode.skill.files[0].path, "SKILL.md");
   });
 
   it("prunes the empty skill directory but keeps the shared commands directory", () => {

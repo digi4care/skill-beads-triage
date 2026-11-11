@@ -1,20 +1,45 @@
 ---
 name: bead-triage
-description: Shared core for the thin /bt_* bead triage commands (continue, complete, add, status, tests, reflect, scaffold). Use when an entry point explicitly loads @bead-triage and selects one mode; it provides the shared execution, triage, verification and stopping rules.
+description: Shared core for bead triage in seven modes (continue, complete, add, status, tests, reflect, scaffold). Use when an entry point selects one mode, either through a thin wrapper command or through direct `bead-triage <mode> [arguments]` invocation; it provides the shared execution, triage, verification and stopping rules.
 metadata: opencode/autoinvoke: false
 ---
 
 # Bead Triage
 
-Shared core for the `/bt_*` command family. The entry point command selects the mode and loads exactly one
-reference. Load only the reference the entry point asks for — never load several mode references at once.
+Shared core for the bead triage family. An entry point selects one mode and loads exactly one reference. Load only
+the reference the entry point asks for — never load several mode references at once.
+
+Two entry forms are supported and behave identically once a mode is selected:
+
+- **Wrapper invocation.** A thin OpenCode command (for example `/bt_continue`) selects the mode itself and names the
+  reference to load.
+- **Direct invocation.** The skill is called directly as `bead-triage <mode> [arguments]`.
+
+## Direct invocation
+
+Parse the first token of the invocation arguments as the mode token. Match it against the mode map below, case
+sensitively, after trimming surrounding whitespace.
+
+- A known mode token selects that mode. The remaining tokens are the runtime arguments for the selected mode; pass
+  them through unchanged and never treat the mode token itself as a runtime argument.
+- A missing mode token, or a token that is not one of the seven known modes, stops the run. Reply with a concise
+  usage line that lists the seven modes and nothing else. Do not load a reference, do not inspect the environment,
+  do not guess a mode, and do not fall back to a default mode.
+
+```text
+Usage: bead-triage <continue|complete|add|status|tests|reflect|scaffold> [arguments]
+```
+
+Everything else in this document — the mode map, the reference paths, the safety rules, the missing-reference
+handling — applies to direct invocation exactly as it applies to wrapper invocation.
 
 ## Reference paths
 
-Every `references/...` path in this skill is relative to the directory containing this `SKILL.md`
-(`~/.agents/skills/bead-triage/`). Resolve it against that directory, never against the current repository or
-the current working directory. Open the exact file that is named; for example
-`references/execution.md` means `~/.agents/skills/bead-triage/references/execution.md`.
+Every `references/...` path in this skill is relative to the directory containing this `SKILL.md`. Resolve it against
+that directory, never against the current repository, the current working directory, or a hardcoded home directory.
+The installation location differs per harness and per scope, so never assume a fixed home or project path; locate the
+directory that holds the loaded `SKILL.md` and resolve against it. Open the exact file that is named; for example
+`references/execution.md` means `<directory containing SKILL.md>/references/execution.md`.
 
 ## Session and actors
 
@@ -25,9 +50,13 @@ the current working directory. Open the exact file that is named; for example
 
 ## Mode map
 
+Each mode maps to exactly one reference. `continue` and `complete` are distinct modes that share the execution
+reference; they differ in scope intent, not in the file that is loaded.
+
 | Mode | Reference | Purpose |
 | --- | --- | --- |
-| `continue` / `complete` | `references/execution.md` | Scope selection, reconciliation and triage, adaptive execution, approvals, reconcile, stop/pause |
+| `continue` | `references/execution.md` | Scope selection, reconciliation and triage, adaptive execution, approvals, reconcile, stop/pause |
+| `complete` | `references/execution.md` | Same reference, with the completion scope as intent |
 | `status` / question | `references/status.md` | Read-only investigation and answer |
 | `tests` | `references/tests.md` | Dedicated test verification and audit |
 | `add` | `references/add.md` | Create one bead from a description |
@@ -46,7 +75,7 @@ files enabled, excluding `.git`, build output and vendored trees; never rely on 
 listing. If a configuration is found, load the addendum before any bead/requirement mutation. If none is found,
 do not load it, touch no Doorstop tool, CLI, plugin or file, and continue the beads flow unchanged. If the
 search itself fails, report the concrete detection error instead of assuming absence. `references/scaffold.md`
-is loaded only by `/bt_scaffold`.
+is loaded only in `scaffold` mode.
 
 ## Non-negotiable safety rules
 
@@ -72,11 +101,14 @@ and do not continue with a partially known procedure.
 If the failure says `project initialization or adapter handshake is not verified`, classify it as a project
 Doorstop-bridge readiness blocker, not as a missing reference. Keep the exact path and error in the report and add:
 `Run /doorstop_init recover, then /doorstop_init status. Recover performs the project checks and adapter handshake. If
-recovery fails, report its exact output and stop; otherwise rerun the original /bt_* command once status is ready.` Never
+recovery fails, report its exact output and stop; otherwise rerun the original triage entry point once status is
+ready.` Never
 enable, initialize or recover the bridge automatically, and never bypass its read denial with another tool, shell command
 or inline reconstruction. Resume only after readiness is verified and the reference loads successfully.
 
 ## Contract for entry points
 
-A wrapper command provides: the explicit skill load `@bead-triage`, the exact relative reference path, the mode, and
-`$ARGUMENTS`. This skill does not implement a command-to-command dispatch; the entry point decides the mode.
+An entry point provides the mode and the runtime arguments, and this skill resolves and loads the one mapped
+reference. A harness wrapper may additionally state the exact relative reference path and how the skill is loaded in
+that harness; that mechanism is harness-specific and is not part of this shared contract. This skill does not implement
+a command-to-command dispatch; the entry point decides the mode.

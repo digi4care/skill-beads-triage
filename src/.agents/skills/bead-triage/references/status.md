@@ -1,7 +1,8 @@
 # Bead Triage — Status and Questions (read-only)
 
-Mode: `status` and free-form questions. This reference is read-only. It never claims, mutates, installs, or repairs
-anything.
+Mode: `status` and free-form questions. Entry forms: `/bt_status [scope]` and `bead-triage status [scope]`; in the
+direct form the leading `status` token is consumed and the remaining tokens are the runtime arguments. This reference is
+read-only. It never claims, mutates, installs, or repairs anything.
 
 ## Procedure
 

@@ -1,9 +1,12 @@
 # Scaffold: initialize beads and Doorstop structures
 
-Procedure for `/bt_scaffold [project-directory]`.
+Procedure for scaffold mode. Entry forms: `/bt_scaffold [project-directory]` or `bead-triage scaffold
+[project-directory]`.
 
-Explicit invocation of `/bt_scaffold` is the **only** authorization to initialize beads or Doorstop
-structures. No other `/bt_*` command may create these structures.
+Explicit invocation of scaffold mode is the **only** authorization to initialize beads or Doorstop structures. Both
+entry forms carry that authorization: `/bt_scaffold` and `bead-triage scaffold`. No other mode and no other command may
+create these structures. The runtime arguments are the tokens after the mode token; in the direct form the leading
+`scaffold` token is consumed as the mode token and is never part of the runtime arguments.
 
 Scope: inspect and create only what is missing. Do not restructure, reformat or overwrite what already
 exists. Do not commit, branch, push, sync, or initialize git.

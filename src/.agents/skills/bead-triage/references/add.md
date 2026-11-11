@@ -1,6 +1,8 @@
 # Add: create exactly one bead
 
-Procedure for `/bt_add [epic|issue|bug] <description>`.
+Procedure for add mode. Entry forms: `/bt_add [epic|issue|bug] <description>` and
+`bead-triage add [epic|issue|bug] <description>`. In the direct form the leading `add` token is consumed and the
+remaining tokens are the runtime arguments.
 
 Scope of this procedure: capture one piece of work as exactly one bead. It does **not** implement, claim, close, sync, or create child beads.
 

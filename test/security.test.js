@@ -31,7 +31,7 @@ function sha256File(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 
-/** Write a registry by hand, so a malformed or malicious one can be simulated. */
+/** Write a legacy (v1) registry by hand, so a malformed or malicious one can be simulated. */
 function writeRegistryFile(scope, groups) {
   writeFileSync(
     scope.registryPath,
@@ -49,6 +49,16 @@ function writeRegistryFile(scope, groups) {
     )}\n`,
     "utf8",
   );
+}
+
+/** Write a registry object verbatim, so a v2 registry can be tampered with. */
+function writeRegistryObject(scope, registry) {
+  writeFileSync(scope.registryPath, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
+/** The OpenCode command group of a registry, in the current (v2) schema. */
+function openCodeCommands(registry) {
+  return registry.harnesses.opencode.commands;
 }
 
 describe("registry path validation", () => {
@@ -176,10 +186,11 @@ describe("adversarial registries", () => {
 
     const registry = loadRegistry(scope.registryPath);
     const installed = join(project, ".opencode", "commands", "bt_status.md");
-    registry.groups.commands.files = registry.groups.commands.files.map((entry) =>
+    const commands = openCodeCommands(registry);
+    commands.files = commands.files.map((entry) =>
       entry.path === "bt_status.md" ? { path: entry.path } : entry,
     );
-    writeRegistryFile(scope, registry.groups);
+    writeRegistryObject(scope, registry);
 
     const result = uninstallAssets({ scope });
     assert.ok(
@@ -204,10 +215,10 @@ describe("adversarial registries", () => {
     installAssets({ scope, source: resolveSource(fixture.root) });
 
     const registry = loadRegistry(scope.registryPath);
-    registry.groups.skill.files = registry.groups.skill.files.map((entry) =>
-      entry.path === "SKILL.md" ? { path: entry.path, sha256: "not-a-hash" } : entry,
+    registry.harnesses.opencode.skill.files = registry.harnesses.opencode.skill.files.map(
+      (entry) => (entry.path === "SKILL.md" ? { path: entry.path, sha256: "not-a-hash" } : entry),
     );
-    writeRegistryFile(scope, registry.groups);
+    writeRegistryObject(scope, registry);
 
     const installed = join(project, ".agents", "skills", SKILL_ID, "SKILL.md");
     const result = uninstallAssets({ scope });
@@ -225,10 +236,11 @@ describe("adversarial registries", () => {
     writeFileSync(installed, "hand edited\n");
 
     const registry = loadRegistry(scope.registryPath);
-    registry.groups.commands.files = registry.groups.commands.files.map((entry) =>
+    const commands = openCodeCommands(registry);
+    commands.files = commands.files.map((entry) =>
       entry.path === "bt_tests.md" ? { path: entry.path } : entry,
     );
-    writeRegistryFile(scope, registry.groups);
+    writeRegistryObject(scope, registry);
 
     const result = uninstallAssets({ scope });
     assert.ok(result.kept.some((f) => f.path === "bt_tests.md"));
