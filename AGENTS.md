@@ -7,8 +7,6 @@
 - Never branch, commit, stage, push, tag, release, publish, delete, or run `br sync` without an explicit user
   request for that action.
 - Run `bv` only after beads exist and only with noninteractive robot or agent-file flags; never launch its TUI.
-- Doorstop owns requirement text, stable UIDs, links, and traceability. Beads owns implementation state, blockers,
-  evidence, and completion. Never put bead IDs in Doorstop links.
 - Treat agent summaries as claims. Verify produced artifacts and command output before recording completion.
 
 ## Development and Validation
@@ -62,14 +60,13 @@ br dep cycles --json
 - **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog; use numbers 0–4, not words.
 - **Types**: task, bug, feature, epic, chore, docs, question.
 - **Blocking**: `br dep add <issue> <depends-on>` adds a dependency.
-- **No automatic sync**: Do not run `br sync`, stage, commit, or push unless the user explicitly requests it.
 
 <!-- end-br-agent-instructions -->
 
 ## beads_viewer Triage
 
-Use [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) (`bv`) only after beads exist. It provides
-read-only, graph-aware recommendations; `br` remains the only tracker mutation CLI.
+Use [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) (`bv`) for read-only, graph-aware
+recommendations; `br` remains the only tracker mutation CLI.
 
 **Use only noninteractive robot or agent-file flags. Bare `bv` launches an interactive TUI.**
 
@@ -78,6 +75,7 @@ bv --robot-triage --brief   # Ranked recommendations, blockers, and project heal
 bv --robot-next             # Single next recommendation; verify before claiming
 bv --robot-plan             # Parallel execution tracks
 bv --robot-graph            # Dependency graph export
+bv --robot-help             # Detailed AI/robot command documentation
 ```
 
 Recommendations do not reserve work. Always inspect current `br` state before executing a suggested claim or close
