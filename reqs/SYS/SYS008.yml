@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.7
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: dTS5JwRtDpaayoUyybGuv-axLpHxeC9ax1-ScUUaVZI=
+text: |
+  The published artifact shall be validated before release: the release validation shall verify the frontmatter of the packed tarball, and `bt-triage doctor` shall report invalid frontmatter in packaged documents and in installed copies, so that a document no harness can load can neither be released nor installed unnoticed.

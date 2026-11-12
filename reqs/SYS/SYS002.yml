@@ -6,6 +6,6 @@ links:
 - EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
 normative: true
 ref: ''
-reviewed: EJF-AnXkzT_m3BZjqoScQXS7eZGUE9FGAlTJIhxh6WA=
+reviewed: Q4Avl4nLLHG-j2rqEyU49MVYYwZLSkmc08GekLbUQhw=
 text: |
   The bt-triage installer shall support global, project, and custom-target installation for the opencode, claude, codex, pi, and generic agents adapters, using their documented skill paths and installing command files only for OpenCode. It shall preserve safe updates and uninstall across adapters that share .agents/skills files, migrate existing registries, and remove a shared file only after its last registered owner is removed. It shall provide accurate help and diagnostics, dry-run behavior, collision handling, and registry-based uninstall that preserves unrelated or modified user data. It shall not perform Git commits, pushes, releases, or br sync.

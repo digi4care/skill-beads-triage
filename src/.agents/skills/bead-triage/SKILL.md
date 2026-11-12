@@ -1,7 +1,7 @@
 ---
 name: bead-triage
 description: Shared core for bead triage in seven modes (continue, complete, add, status, tests, reflect, scaffold). Use when an entry point selects one mode, either through a thin wrapper command or through direct `bead-triage <mode> [arguments]` invocation; it provides the shared execution, triage, verification and stopping rules.
-metadata: opencode/autoinvoke: false
+disable-model-invocation: true
 ---
 
 # Bead Triage

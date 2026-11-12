@@ -37,6 +37,11 @@ Claude Code invokes the canonical skill directly; no legacy `.claude/commands/` 
 installed. Current Codex CLI releases no longer support the former custom-prompt mechanism, so the Codex adapter
 also uses direct skill invocation rather than prompt files.
 
+Every adapter installs the same canonical skill file. Its frontmatter sets `disable-model-invocation: true`, the
+portable field that OpenCode, Claude Code, and Pi all honour, so the skill loads only through an explicit command
+or a direct invocation. The field is not part of the Agent Skills specification; a harness that ignores it, such as
+the Codex CLI, may still load the skill automatically.
+
 ## Modes and OpenCode commands
 
 | Mode | OpenCode command | Purpose |
@@ -72,10 +77,19 @@ For using the workflow:
 
 ## Installation
 
-Install the npm package globally:
+This package is distributed through GitHub releases; it is not published to the npm registry. Download the release
+artifact and unpack it:
 
 ```sh
-npm install --global @digi4care/skill-beads-triage
+gh release download v0.1.0 --repo digi4care/skill-beads-triage --pattern "*.tgz"
+tar -xzf digi4care-skill-beads-triage-0.1.0.tgz
+```
+
+The unpacked `package/` directory holds the CLI and every packaged asset. The CLI has no runtime dependencies, so it
+runs straight from the unpacked directory:
+
+```sh
+node package/bin/bt-triage.js install --global --harness all
 ```
 
 Select an adapter with `--harness`. The default remains `opencode` for backwards compatibility. Use `all` to install
@@ -118,7 +132,7 @@ bt-triage install --project --harness codex
 Or invoke the package without installing its CLI globally:
 
 ```sh
-npx --package @digi4care/skill-beads-triage bt-triage install --project --harness all
+node package/bin/bt-triage.js install --project --harness all
 ```
 
 Project destinations are `.agents/skills/bead-triage/` for every adapter except Claude Code, which uses
@@ -139,7 +153,7 @@ bt-triage install --project --harness all --dry-run
 
 ## Updates, diagnostics, and removal
 
-After updating the npm package, refresh already installed assets:
+After updating to a newer release artifact, refresh already installed assets:
 
 ```sh
 bt-triage update --global --harness all
@@ -176,12 +190,16 @@ files; it permits overwriting modified or unregistered targets.
 
 The installer never runs `br sync`, stages or commits Git changes, pushes, publishes, or creates releases.
 
+`bt-triage doctor` also verifies that every packaged document and every installed copy carries frontmatter that
+parses as YAML. Harnesses skip a document with broken frontmatter without reporting it, so the check names the
+offending file instead.
+
 ## Requirements and execution planning
 
 This repository uses Doorstop for requirement text, stable UIDs, links, and verification traceability. It uses
 beads_rust for tasks, dependencies, claims, evidence, and closure. See [docs/planning.md](docs/planning.md) for the
-ownership boundary and inspection commands. Planning artifacts are repository-only and are not included in the npm
-package.
+ownership boundary and inspection commands. Planning artifacts are repository-only and are not included in the release
+artifact.
 
 ## Development
 
@@ -191,12 +209,13 @@ installed CLI itself supports Node.js 20 and newer.
 ```sh
 npm ci
 npm run check          # Biome, Markdown lint, and Node.js tests
-npm run validate       # check + dependency freshness + audit + package dry run
+npm run verify:package # inspects the packed tarball, not only the working tree
+npm run validate       # check + dependency freshness + audit + package dry run + packed-tarball check
 npm run prepush        # required successful check before any authorized push
 ```
 
 GitHub Actions runs `npm run validate` on pushes, pull requests, and manual workflow dispatch. CI contains no tag,
-release, or npm publication step.
+release, or publication step.
 
 Filesystem installation tests and packed-CLI lifecycle checks verify the adapters shipped by this repository. They
 do not replace runtime smoke tests in each harness CLI, and compatibility documentation distinguishes documented
@@ -217,15 +236,29 @@ decision; it is never applied silently. The manifest temporarily overrides trans
 to patched releases because the latest markdownlint dependency ranges otherwise select vulnerable versions. Remove
 those overrides only when the normal dependency tree passes `npm audit` without them.
 
+The release artifact itself has no runtime dependencies. `yaml` stays a development dependency, used by the test
+suite and the release validation, so the published CLI runs from an unpacked tarball without an install step.
+
 ## Versioning and releases
 
 This project follows [Semantic Versioning](https://semver.org/) and
 [Keep a Changelog](https://keepachangelog.com/). The initial public version is `0.1.0`. During `0.x`, minor versions
 may contain breaking changes; patch versions remain backwards compatible. See [CHANGELOG.md](CHANGELOG.md).
 
-Tags and publication are manual and require explicit authorization. A maintainer performs a release by running the
-full validation, choosing the appropriate SemVer bump, reviewing the changelog and packed tarball, and only then
-creating the version tag and running `npm publish`. `prepublishOnly` runs validation again as a final safeguard.
+Releases are manual and require explicit authorization. Distribution runs through GitHub releases, not the npm
+registry. A maintainer performs a release by running the full validation, choosing the appropriate SemVer bump,
+reviewing the changelog and the packed tarball, and only then creating the version tag and publishing the release:
+
+```sh
+npm run validate
+npm run release:tarball
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+gh release create v0.1.0 release/digi4care-skill-beads-triage-0.1.0.tgz --title "v0.1.0" --notes-file release/release-notes.md
+```
+
+The tarball is attached to the release as a download, so every consumer installs the same artifact the maintainer
+validated. The validation inspects that tarball itself, so a release cannot ship a document that no harness can load.
 
 ## Creator
 

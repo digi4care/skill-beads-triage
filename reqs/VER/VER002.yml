@@ -3,9 +3,9 @@ derived: false
 header: ''
 level: 1.1
 links:
-- SYS002: mdzw_AdMJj-oHDjLrPiJRdLf1u7b28qBxKwj6RnBTNY=
+- SYS002: 7W8Id05xTBHIGa1VeM0I-8n2Xaj26Mk8fZezx8xK2W8=
 normative: true
 ref: ''
-reviewed: rVj6DT561ff_3fWwvEDXegQLu-b7nenQGVgY1Jym4CI=
+reviewed: G9SOI-EWPZpAR6WrJN8aNIC-eDrbLHMbMeoe6MlgW88=
 text: |
   Run installer unit and temporary-directory integration tests for every adapter and scope, shared-file ownership, registry migration, dry-run, collisions, updates, adversarial registries, and safe uninstall; inspect help and exercise the packed CLI for single-adapter and multi-adapter lifecycles.

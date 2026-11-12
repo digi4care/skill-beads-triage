@@ -8,8 +8,8 @@ Doorstop owns requirement text, stable UIDs, parent links, and requirement-to-ve
 hierarchy lives under `reqs/`:
 
 - `EPIC001` defines the repository-level objective.
-- `SYS001` through `SYS006` define product and delivery requirements linked to `EPIC001`.
-- `VER001` through `VER006` define the corresponding verification items linked to their SYS requirements.
+- `SYS001` through `SYS008` define product and delivery requirements linked to `EPIC001`.
+- `VER001` through `VER008` define the corresponding verification items linked to their SYS requirements.
 
 Requirement files are managed through Doorstop, not edited as hand-written YAML. Validate the tree with:
 
@@ -23,8 +23,12 @@ A Doorstop `reviewed` fingerprint detects content changes; it is not a record of
 
 The repository keeps one canonical skill and routes harness differences through installer adapters. `SYS001` and
 `VER001` cover direct mode routing and wrapper equivalence. `SYS002` and `VER002` cover adapter paths, registry v1
-migration, shared ownership, and lifecycle safety. Documentation may describe generic `.agents/skills/` installation
-support, but must not turn that path compatibility into a claim of runtime certification for every harness.
+migration, shared ownership, and lifecycle safety. `SYS007` and `VER007` cover frontmatter validity of the packaged
+skill and command files and the portable invocation-control field. `SYS008` and `VER008` cover validation of the
+published artifact: the packed tarball is inspected during release validation, and `bt-triage doctor` reports
+invalid frontmatter in packaged documents and in installed copies. Documentation may describe generic
+`.agents/skills/` installation support, but must not turn that path compatibility into a claim of runtime
+certification for every harness.
 
 ## beads_rust and beads_viewer
 

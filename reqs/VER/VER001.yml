@@ -3,9 +3,9 @@ derived: false
 header: ''
 level: 1.0
 links:
-- SYS001: 0E-4noaZU38glucBmiswSD3hDnX2IoRaqqeen4a4EiI=
+- SYS001: eyOxmRujzYyg0DkudW-_18XdcM0Fm-1HwkX2-bCLJJs=
 normative: true
 ref: ''
-reviewed: 4Imr5hBW6RyhVTMhJ1i88jaZqs_5_UPvpTxuPil9MCk=
+reviewed: izXe8jzKPIFSIWdxmuLlOEc8UgaCpef2B2k6xy4B7W4=
 text: |
   Verify the canonical skill layout, direct mode routing, path-independent reference resolution, all seven OpenCode command files, their one-mode reference mappings, absence of agent, model, or subagent overrides, and absence of duplicated wrapper-skill trees.

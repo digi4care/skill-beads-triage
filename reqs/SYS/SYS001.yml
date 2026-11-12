@@ -6,6 +6,6 @@ links:
 - EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
 normative: true
 ref: ''
-reviewed: 3E3KYD3LK8ESbnqftvZ-090ugKU6U_pamEoPv0cwZeA=
+reviewed: isKqt0ecV4WkGWs_X8UqLAVCXRnidMzGkVMJJqW2AZw=
 text: |
   The package shall provide one canonical Agent Skills-compatible bead-triage skill with relative references and exactly seven thin OpenCode command templates for continue, complete, add, status, tests, reflect, and scaffold. The canonical skill shall route direct <mode> [arguments] invocation to exactly one mode reference. Other harness adapters shall reuse the canonical skill without duplicating it or introducing harness-specific skill-loading syntax into shared instructions. OpenCode commands shall preserve the user's current agent and model selection.

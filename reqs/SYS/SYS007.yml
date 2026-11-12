@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.6
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: ovHumSd9NFmjtVuN_o8EahGoBVvNkdb7kYemlAnLrcw=
+text: |
+  The packaged skill and command files shall carry frontmatter that every supported harness can parse, so no adapter silently skips a shipped asset. The canonical skill shall express invocation control with the portable `disable-model-invocation` field instead of a harness-specific metadata key, so one canonical skill file stays loadable for every adapter.

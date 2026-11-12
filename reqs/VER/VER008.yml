@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.7
+links:
+- SYS008: AUCBrIONI0wB0GKoUo5_a1Yf86K5UVUncZS9eP-b6Z0=
+normative: true
+ref: ''
+reviewed: g4E9Ewj11hwukf45mSbZ_2R1acBD6N3x__8xxKIhJDM=
+text: |
+  Run `npm run verify:package` and confirm that it inspects the packed tarball, reports the number of packaged documents, and fails on invalid frontmatter. Run `bt-triage doctor` against a package with invalid frontmatter and against an installation with a broken copy, and confirm exit code 1 with a diagnostic that names the file.

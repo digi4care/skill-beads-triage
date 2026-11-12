@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.6
+links:
+- SYS007: dT7cmJZpldtMh1faVdLl0OkLpfqlgBzTY-82-A1YF9Q=
+normative: true
+ref: ''
+reviewed: rrK5IFxHnDaNe1VxVa_nZdaPkKoa6sR3ioNxl_llljA=
+text: |
+  Run the packaged frontmatter test suite and confirm that every packaged skill and command file parses as valid YAML, that the canonical skill declares `disable-model-invocation: true`, and that `bt-triage doctor` reports the installed global assets as intact.

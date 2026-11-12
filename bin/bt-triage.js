@@ -347,6 +347,83 @@ function sourceDestDir(source, group) {
   return group === "skill" ? source.skillDir : source.commandsDir;
 }
 
+// ─── Frontmatter ─────────────────────────────────────────────────────────────
+
+/**
+ * Judge one frontmatter scalar.
+ *
+ * A plain scalar cannot contain ": ": that is the compact mapping that YAML
+ * rejects with "nested mappings are not allowed in compact mappings". A quoted
+ * scalar may contain anything as long as its quote is closed.
+ *
+ * @param {string} value scalar text
+ * @returns {string|null} a message describing the problem, or null
+ */
+function frontmatterScalarProblem(value) {
+  if (value === "") return null;
+  const quote = value[0];
+  if (quote === '"' || quote === "'") {
+    if (value.length < 2 || value.at(-1) !== quote) return "unterminated quoted value";
+    return null;
+  }
+  if (value.startsWith("[") || value.startsWith("{") || value.startsWith("-")) {
+    return "unsupported frontmatter value";
+  }
+  if (value.includes(": ") || value.endsWith(":")) {
+    return "nested mapping in a compact value";
+  }
+  return null;
+}
+
+/**
+ * Check the YAML frontmatter of a markdown document.
+ *
+ * A harness skips a document whose frontmatter cannot be parsed, so a broken
+ * block turns a shipped asset into dead weight without any visible error.
+ *
+ * The installer runs from a downloaded release artifact without an installed
+ * dependency tree, so this judges the frontmatter subset the package uses
+ * instead of parsing YAML: top level keys, optional nested blocks, and quoted
+ * or plain scalars. Anything outside that subset is reported instead of
+ * passing silently.
+ *
+ * @param {string} filePath document to check
+ * @param {{ required?: boolean }} [options] when required, a document without a
+ *   frontmatter block counts as a problem
+ * @returns {string|null} a message describing the problem, or null when the
+ *   document has no frontmatter block or that block is acceptable
+ */
+export function frontmatterProblem(filePath, { required = false } = {}) {
+  let raw;
+  try {
+    raw = readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+  if (!raw.startsWith("---\n")) {
+    return required ? "missing frontmatter block" : null;
+  }
+  const end = raw.indexOf("\n---", 3);
+  if (end === -1) return "unterminated frontmatter block";
+  const lines = raw.slice(4, end).split("\n");
+  for (const [index, line] of lines.entries()) {
+    if (line.trim() === "") continue;
+    const nested = /^\s+([A-Za-z0-9_./-]+):(\s+(.*))?$/.exec(line);
+    if (nested) {
+      const problem = frontmatterScalarProblem((nested[3] ?? "").trim());
+      if (problem) return `line ${index + 1}: ${problem}`;
+      continue;
+    }
+    const top = /^([A-Za-z0-9_./-]+):(\s+(.*))?$/.exec(line);
+    if (!top) return `line ${index + 1}: unsupported frontmatter line: ${line.trim()}`;
+    const value = (top[3] ?? "").trim();
+    if (value === "") continue;
+    const problem = frontmatterScalarProblem(value);
+    if (problem) return `line ${index + 1}: ${problem}`;
+  }
+  return null;
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
@@ -1523,6 +1600,22 @@ function cmdDoctor(flags) {
   const commandLabel = missingCommands.length === 0 ? SYMBOL.ok : SYMBOL.bad;
   out(`  ${commandLabel} command source ${source.commandsDir} (${commands.length} file(s))`);
   for (const c of missingCommands) out(`    ${SYMBOL.bad} missing ${c}`);
+  // A document whose frontmatter does not parse is skipped by the harness, so
+  // the package would install an asset that no adapter can load.
+  const frontmatterDocs = [
+    join(source.skillDir, "SKILL.md"),
+    ...REQUIRED_COMMANDS.map((c) => join(source.commandsDir, c)),
+  ].filter((file) => existsSync(file));
+  const packagedProblems = frontmatterDocs
+    .map((file) => ({ file, problem: frontmatterProblem(file, { required: true }) }))
+    .filter((entry) => entry.problem);
+  out(
+    `  ${packagedProblems.length === 0 ? SYMBOL.ok : SYMBOL.bad} frontmatter ` +
+      `${frontmatterDocs.length} document(s)`,
+  );
+  for (const { file, problem } of packagedProblems) {
+    out(`    ${SYMBOL.bad} invalid frontmatter ${file}: ${problem}`);
+  }
   out("");
   out("Installations:");
   const scopes = knownScopes({ home: ctx.home, cwd: ctx.cwd });
@@ -1530,6 +1623,7 @@ function cmdDoctor(flags) {
   let any = false;
   let corruptRegistry = false;
   let integrityIssues = 0;
+  let frontmatterIssues = 0;
   for (const scope of scopes) {
     if (!scope.registry) continue;
     any = true;
@@ -1553,6 +1647,15 @@ function cmdDoctor(flags) {
     for (const [harnessId, groups] of visibleHarnesses) {
       for (const [group, g] of Object.entries(groups)) {
         out(`    ${harnessId} ${group}: ${g.present.length}/${g.total} file(s) at ${g.dest}`);
+        for (const rel of g.present) {
+          if (!rel.endsWith(".md")) continue;
+          const dest = safeJoin(g.dest, rel);
+          if (!dest) continue;
+          const problem = frontmatterProblem(dest);
+          if (!problem) continue;
+          frontmatterIssues += 1;
+          out(`    ${SYMBOL.bad} invalid frontmatter ${dest}: ${problem}`);
+        }
       }
     }
     for (const issue of visibleIssues) out(`    ${SYMBOL.warn} ${issue.message}`);
@@ -1564,7 +1667,14 @@ function cmdDoctor(flags) {
   // commands must be present before the package can be installed. A corrupt
   // registry or a visible installation integrity problem (a missing SKILL.md,
   // a modified or unverifiable file) is a failure too.
-  return missingCommandsAny || !skillOk || corruptRegistry || integrityIssues > 0 ? 1 : 0;
+  return missingCommandsAny ||
+    !skillOk ||
+    corruptRegistry ||
+    integrityIssues > 0 ||
+    frontmatterIssues > 0 ||
+    packagedProblems.length > 0
+    ? 1
+    : 0;
 }
 
 export function runCli(argv = process.argv.slice(2)) {
