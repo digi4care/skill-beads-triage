@@ -1,7 +1,6 @@
 ---
 name: bead-triage
-description: Shared core for bead triage in seven modes (continue, complete, add, status, tests, reflect, scaffold). Use when an entry point selects one mode, either through a thin wrapper command or through direct `bead-triage <mode> [arguments]` invocation; it provides the shared execution, triage, verification and stopping rules.
-disable-model-invocation: true
+description: Shared core for bead triage in eight modes (continue, complete, add, status, tests, reflect, scaffold, triage). Invoke directly in the appropriate mode when the current user request clearly requires bead issue creation or management; wrappers are optional shortcuts. Preserve explicit user intent, typed/scope/evidence rules, and candidate native requirement safeguards.
 ---
 
 # Bead Triage
@@ -9,7 +8,8 @@ disable-model-invocation: true
 Shared core for the bead triage family. An entry point selects one mode and loads exactly one reference. Load only
 the reference the entry point asks for — never load several mode references at once.
 
-Two entry forms are supported and behave identically once a mode is selected:
+Wrappers such as `/bt_continue` are optional shortcuts for selecting a mode. The model may invoke this skill directly when
+the current user request clearly requires bead issue creation or management; do not use it for unrelated requests.
 
 - **Wrapper invocation.** A thin OpenCode command (for example `/bt_continue`) selects the mode itself and names the
   reference to load.
@@ -22,12 +22,12 @@ sensitively, after trimming surrounding whitespace.
 
 - A known mode token selects that mode. The remaining tokens are the runtime arguments for the selected mode; pass
   them through unchanged and never treat the mode token itself as a runtime argument.
-- A missing mode token, or a token that is not one of the seven known modes, stops the run. Reply with a concise
-  usage line that lists the seven modes and nothing else. Do not load a reference, do not inspect the environment,
+- A missing mode token, or a token that is not one of the eight known modes, stops the run. Reply with a concise
+  usage line that lists the eight modes and nothing else. Do not load a reference, do not inspect the environment,
   do not guess a mode, and do not fall back to a default mode.
 
 ```text
-Usage: bead-triage <continue|complete|add|status|tests|reflect|scaffold> [arguments]
+Usage: bead-triage <continue|complete|add|status|tests|reflect|scaffold|triage> [arguments]
 ```
 
 Everything else in this document — the mode map, the reference paths, the safety rules, the missing-reference
@@ -62,6 +62,7 @@ reference; they differ in scope intent, not in the file that is loaded.
 | `add` | `references/add.md` | Create one bead from a description |
 | `reflect` | `references/reflect.md` | Session analysis and proposal, never asset changes |
 | `scaffold` | `references/scaffold.md` | Explicit initialization of beads and Doorstop structures |
+| `triage` | `references/triage.md` | Read-only report of the best ready issues; it never claims or mutates anything |
 
 Shared prerequisite, CI and tooling repair rules live in `references/tooling.md`. `references/execution.md` and
 `references/tests.md` point to it; the rules themselves are stated once, only there.
@@ -99,12 +100,15 @@ requested and the failure. Do not reconstruct a reduced workflow from memory, do
 and do not continue with a partially known procedure.
 
 If the failure says `project initialization or adapter handshake is not verified`, classify it as a project
-Doorstop-bridge readiness blocker, not as a missing reference. Keep the exact path and error in the report and add:
-`Run /doorstop_init recover, then /doorstop_init status. Recover performs the project checks and adapter handshake. If
-recovery fails, report its exact output and stop; otherwise rerun the original triage entry point once status is
-ready.` Never
-enable, initialize or recover the bridge automatically, and never bypass its read denial with another tool, shell command
-or inline reconstruction. Resume only after readiness is verified and the reference loads successfully.
+Doorstop-bridge readiness blocker, not as a missing reference. Keep the exact path and error in the report.
+Before suggesting or invoking recovery, identify the active harness from trusted runtime context and consult only that
+harness's documented, registered status and recovery operations. Never transfer a command from another harness or
+infer a command from a generic skill. If the active harness has no supported recovery route, report that limitation
+and stop. Recovery requires explicit user authorization and must be followed by a status read-back. If recovery
+fails, report the exact output and stop.
+
+Never enable, initialize or recover the bridge automatically, and never bypass its read denial with another tool,
+shell command or inline reconstruction. Resume only after readiness is verified and the reference loads successfully.
 
 ## Contract for entry points
 

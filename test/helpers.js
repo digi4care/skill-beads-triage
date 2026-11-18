@@ -25,7 +25,7 @@ export function makeFixture({ commands } = {}) {
     "",
   ].join("\n");
   writeFileSync(join(skillDir, "SKILL.md"), skillDoc);
-  const modes = ["add", "complete", "continue", "reflect", "scaffold", "status", "tests"];
+  const modes = ["add", "complete", "continue", "reflect", "scaffold", "status", "tests", "triage"];
   for (const mode of modes) {
     const body = `# ${mode}\n\nReference for ${mode}.\n`;
     writeFileSync(join(skillDir, "references", `${mode}.md`), body);
@@ -39,6 +39,7 @@ export function makeFixture({ commands } = {}) {
     "bt_scaffold.md",
     "bt_status.md",
     "bt_tests.md",
+    "bt_triage.md",
   ];
   for (const name of commandNames) {
     writeFileSync(join(commandsDir, name), `---\ndescription: ${name}\n---\n\n@bead-triage\n`);

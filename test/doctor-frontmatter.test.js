@@ -50,7 +50,7 @@ describe("doctor frontmatter check", () => {
     const fixture = makeFixture();
     const result = run(["doctor", "--source", fixture.root, "--home", tmp(), "--cwd", tmp()]);
     assert.equal(result.code, 0, result.stdout);
-    assert.match(result.stdout, /frontmatter 8 document\(s\)/);
+    assert.match(result.stdout, /frontmatter 9 document\(s\)/);
   });
 
   it("fails when a packaged document carries invalid frontmatter", () => {

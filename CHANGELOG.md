@@ -8,6 +8,10 @@ changes; patch releases remain backwards compatible.
 
 ## [Unreleased]
 
+### Added
+
+- The new read-only `/bt_triage` triage mode and wrapper reporting the best ready issues (id, title, priority, reason, blocker, exact next action) without claiming, SYS009/VER009.
+
 ## [0.1.0] - 2026-11-12
 
 ### Added

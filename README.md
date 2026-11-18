@@ -2,7 +2,7 @@
 
 A portable [Agent Skills](https://agentskills.io/specification) package for repeatable, traceable issue triage with
 [beads_rust](https://github.com/Dicklesworthstone/beads_rust) (`br`). Harness adapters install one canonical skill;
-OpenCode additionally receives seven `/bt_*` commands. Optional Doorstop integration connects implementation work to
+OpenCode additionally receives eight `/bt_*` commands. Optional Doorstop integration connects implementation work to
 stable requirements and verification items.
 
 ## Why this skill exists
@@ -22,7 +22,7 @@ Agent Skills specification does not standardize slash commands or prompt argumen
 
 | Adapter | Harness | Primary invocation | Installed assets |
 | --- | --- | --- | --- |
-| `opencode` | OpenCode | `/bt_<mode> [args]` | Canonical skill plus seven command wrappers |
+| `opencode` | OpenCode | `/bt_<mode> [args]` | Canonical skill plus eight command wrappers |
 | `claude` | Claude Code | `/bead-triage <mode> [args]` | Canonical skill in `.claude/skills/` |
 | `codex` | Codex CLI | `$bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` |
 | `pi` | Pi | `/skill:bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` |
@@ -53,6 +53,7 @@ the Codex CLI, may still load the skill automatically.
 | `tests` | `/bt_tests [scope]` | Run the dedicated test verification and audit workflow. |
 | `reflect` | `/bt_reflect [scope]` | Analyze a session and propose reusable improvements without editing assets. |
 | `scaffold` | `/bt_scaffold [project-directory]` | Explicitly initialize beads and Doorstop structures in an existing Git worktree. |
+| `triage` | `/bt_triage` | Report the best ready issues read-only with reason, blocker and next action; never claims anything. |
 
 Every OpenCode command loads the shared skill and exactly one mode reference while preserving the current agent and
 model selection. Direct skill invocation routes `<mode>` through the same reference mapping. Missing or unknown

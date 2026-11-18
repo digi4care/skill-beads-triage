@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.8
+links:
+- SYS009: Usj1ZlMurGTiQhSCIWFe8uUewqmBso65xMpm_JBGC5I=
+normative: true
+ref: ''
+reviewed: zc7dqBMHmZjygRFCHS_k6aSzO-7SNems4pS0mgNbpYQ=
+text: |
+  Verify the triage mode reference and its command wrapper: the read-only procedure, the required report fields (issue id, title, priority, reason, blocker, exact next action), the absence of any automatic claim or mutation, the explicit handoff to the continue route for claiming, the one-mode reference mapping, and the inclusion of the wrapper in the packaged artifact, the installer command set, and the release verification.

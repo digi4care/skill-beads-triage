@@ -249,7 +249,7 @@ describe("shared ownership", () => {
       0,
       "a file whose last owner leaves in the same run is not kept",
     );
-    assert.equal(result.removed.length, 15, "8 shared skill files + 7 command files");
+    assert.equal(result.removed.length, 17, "9 shared skill files + 8 command files");
   });
 
   it("drops only the uninstalled owner from the registry", () => {

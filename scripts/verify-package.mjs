@@ -6,7 +6,7 @@
  * packed tarball, which is what npm publishes and what `npx` installs. It
  * checks that:
  *
- *   - the tarball contains the canonical skill and all seven command wrappers
+ *   - the tarball contains the canonical skill and all eight command wrappers
  *   - every packaged markdown document with a frontmatter block parses as YAML
  *   - the canonical skill declares the portable `disable-model-invocation` field
  *
@@ -30,6 +30,7 @@ const REQUIRED_COMMANDS = [
   "bt_scaffold.md",
   "bt_status.md",
   "bt_tests.md",
+  "bt_triage.md",
 ];
 const SKILL_MEMBER = "package/src/.agents/skills/bead-triage/SKILL.md";
 const COMMAND_MEMBER = (name) => `package/src/.opencode/commands/${name}`;

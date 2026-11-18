@@ -76,7 +76,7 @@ describe("packaged frontmatter", () => {
   it("gives every OpenCode command wrapper a description", () => {
     const commandDir = join(SRC_ROOT, ".opencode", "commands");
     const commands = readdirSync(commandDir).filter((name) => name.endsWith(".md"));
-    assert.equal(commands.length, 7);
+    assert.equal(commands.length, 8);
     for (const name of commands) {
       const yaml = readFrontmatter(join(commandDir, name));
       assert.notEqual(yaml, null, `${name} must carry frontmatter`);

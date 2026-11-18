@@ -71,7 +71,7 @@ describe("install", () => {
     }
   });
 
-  it("installs the skill and all seven commands into a project scope", () => {
+  it("installs the skill and all eight commands into a project scope", () => {
     const fixture = makeFixture();
     const project = tmp();
     const scope = resolveScope({ scope: "project", cwd: project });
@@ -90,8 +90,8 @@ describe("install", () => {
     const registry = loadRegistry(scope.registryPath);
     assert.ok(registry, "registry should exist");
     assert.equal(registry.schemaVersion, 2);
-    assert.equal(registry.harnesses.opencode.skill.files.length, 8);
-    assert.equal(registry.harnesses.opencode.commands.files.length, 7);
+    assert.equal(registry.harnesses.opencode.skill.files.length, 9);
+    assert.equal(registry.harnesses.opencode.commands.files.length, 8);
   });
 
   it("installs into the global scope", () => {
@@ -254,7 +254,7 @@ describe("uninstall", () => {
 
     const result = uninstallAssets({ scope });
 
-    assert.equal(result.removed.length, 15);
+    assert.equal(result.removed.length, 17);
     assert.equal(result.kept.length, 0);
     assert.equal(existsSync(join(scope.skillDir, "SKILL.md")), false);
     assert.equal(existsSync(join(scope.commandsDir, "bt_status.md")), false);

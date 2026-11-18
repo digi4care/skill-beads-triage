@@ -1,0 +1,11 @@
+active: true
+derived: false
+header: ''
+level: 1.8
+links:
+- EPIC001: 3fGWDYk4vkoRSbvSTgwDqgkPHmfm_Mb2yQ77JBzdKX0=
+normative: true
+ref: ''
+reviewed: cpxS5ai4wAPvuzbsLRnrI_-b0tAUnyD8mfaTq-szNEc=
+text: |
+  The package shall provide one read-only triage mode with a thin OpenCode command template `/bt_triage` that loads only the triage reference. The triage mode shall report the best ready issues with issue id, title, priority, reason, blocker, and exact next action; it shall never claim or mutate anything automatically and shall leave claiming to the explicit continue route (`/bt_continue <issue-id>`). The mode shall use the existing beads_rust and beads_viewer integration, shall add no bridge-specific policy, and shall be packaged, installed, and release-verified like every other command template.

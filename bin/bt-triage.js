@@ -110,7 +110,7 @@ export const version = packageJson.version;
 /** Skill id; every harness derives the skill id from the directory name. */
 export const SKILL_ID = "bead-triage";
 
-/** The seven command templates shipped by this package. */
+/** The eight command templates shipped by this package. */
 export const REQUIRED_COMMANDS = [
   "bt_add.md",
   "bt_complete.md",
@@ -119,6 +119,7 @@ export const REQUIRED_COMMANDS = [
   "bt_scaffold.md",
   "bt_status.md",
   "bt_tests.md",
+  "bt_triage.md",
 ];
 
 export const REGISTRY_FILENAME = ".bt-triage-registry.json";
@@ -920,7 +921,7 @@ export function installAssets({ scope, source, harnesses, dryRun = false, force 
   }
 
   // A first install requires the complete package: the skill document and, for
-  // the OpenCode adapter, all seven command templates. Later updates tolerate a
+  // the OpenCode adapter, all eight command templates. Later updates tolerate a
   // source where a command was dropped; that file is then retired.
   const installsCommands = selected.includes("opencode");
   const isFirstInstall = !registry?.harnesses?.opencode?.commands;
@@ -1663,7 +1664,7 @@ function cmdDoctor(flags) {
   if (!any) out("  none found");
   const missingCommandsAny = missingCommands.length > 0;
   out("");
-  // A broken package source is a failure: the skill document and all seven
+  // A broken package source is a failure: the skill document and all eight
   // commands must be present before the package can be installed. A corrupt
   // registry or a visible installation integrity problem (a missing SKILL.md,
   // a modified or unverifiable file) is a failure too.
