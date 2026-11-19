@@ -43,7 +43,6 @@ describe("cli", () => {
       "pi_skills",
       "@digi4care/pi-",
       "digi4care/pi-skills",
-      ".omp",
       "omp-skills",
       "br sync",
       "self-update",

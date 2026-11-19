@@ -49,8 +49,8 @@ function run(args, env = {}) {
 }
 
 describe("harness adapters", () => {
-  it("documents the five adapters", () => {
-    assert.deepEqual(HARNESS_IDS, ["opencode", "claude", "codex", "pi", "agents"]);
+  it("documents the six adapters", () => {
+    assert.deepEqual(HARNESS_IDS, ["opencode", "claude", "codex", "pi", "agents", "omp"]);
     assert.equal(DEFAULT_HARNESS, "opencode");
   });
 
@@ -115,6 +115,46 @@ describe("harness adapters", () => {
         assert.equal(existsSync(commandsDir), false, `${harnessId} must not install commands`);
       }
     }
+  });
+
+  it("installs omp skill in project scope without commands", () => {
+    const fixture = makeFixture();
+    const project = tmp();
+    const scope = resolveScope({ scope: "project", cwd: project });
+    const result = installAssets({
+      scope,
+      source: resolveSource(fixture.root),
+      harnesses: ["omp"],
+    });
+    assert.equal(result.skipped.length, 0, "omp must install cleanly");
+    const ompSkillRoot = join(project, ".agents", "skills", SKILL_ID);
+    assert.ok(existsSync(join(ompSkillRoot, "SKILL.md")), "omp must install SKILL.md");
+    const ompCommandsDir = join(project, ".omp", "agent", "commands");
+    assert.equal(
+      existsSync(ompCommandsDir),
+      false,
+      "omp must not install commands in project scope",
+    );
+  });
+
+  it("installs omp skill and commands in global scope", () => {
+    const fixture = makeFixture();
+    const home = tmp();
+    const scope = resolveScope({ scope: "global", home });
+    const result = installAssets({
+      scope,
+      source: resolveSource(fixture.root),
+      harnesses: ["omp"],
+    });
+    assert.equal(result.skipped.length, 0, "omp must install cleanly");
+    const ompSkillRoot = join(home, ".agents", "skills", SKILL_ID);
+    assert.ok(existsSync(join(ompSkillRoot, "SKILL.md")), "omp must install SKILL.md");
+    const ompCommandsDir = join(home, ".omp", "agent", "commands");
+    assert.ok(existsSync(ompCommandsDir), "omp must install commands in global scope");
+    assert.ok(
+      existsSync(join(ompCommandsDir, "bt_status.md")),
+      "omp must install command templates",
+    );
   });
 
   it("installs the global equivalents under the injected home", () => {

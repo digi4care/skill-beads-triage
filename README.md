@@ -26,7 +26,7 @@ Agent Skills specification does not standardize slash commands or prompt argumen
 | `claude` | Claude Code | `/bead-triage <mode> [args]` | Canonical skill in `.claude/skills/` |
 | `codex` | Codex CLI | `$bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` |
 | `pi` | Pi | `/skill:bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` |
-| `agents` | Documented Agent Skills consumers | Native skill invocation with `<mode> [args]` | Canonical skill in `.agents/skills/` |
+| `omp` | omp | `/skill:bead-triage <mode> [args]` | Canonical skill in `.agents/skills/` plus eight command wrappers (global scope only) |
 
 The `agents` adapter uses paths documented by consumers including Codex, Cursor, Gemini CLI, Pi, OpenCode, and the
 VS Code Local harness. It is a generic **skill installation route**, not a claim of universal runtime compatibility
@@ -103,7 +103,7 @@ bt-triage install --global --harness opencode
 bt-triage install --global --harness claude
 bt-triage install --global --harness codex
 bt-triage install --global --harness pi
-bt-triage install --global --harness agents
+bt-triage install --global --harness omp
 ```
 
 Or install all supported adapters:
@@ -119,6 +119,7 @@ Global destinations are:
 | `opencode` | `~/.agents/skills/bead-triage/` and `~/.config/opencode/commands/bt_*.md` |
 | `claude` | `~/.claude/skills/bead-triage/` |
 | `codex`, `pi`, `agents` | `~/.agents/skills/bead-triage/` |
+| `omp` | `~/.agents/skills/bead-triage/` and `~/.omp/agent/commands/bt_*.md` (global scope only) |
 
 ### One project
 

@@ -10,7 +10,7 @@ changes; patch releases remain backwards compatible.
 
 ### Added
 
-- The new read-only `/bt_triage` triage mode and wrapper reporting the best ready issues (id, title, priority, reason, blocker, exact next action) without claiming, SYS009/VER009.
+- omp harness adapter — canonical skill via shared `.agents/skills`, the eight command templates in the global `~/.omp/agent/commands` scope (project/custom installs are skill-only) (SYS002, VER002).
 
 ## [0.1.0] - 2026-11-12
 

@@ -12,15 +12,18 @@
  * additionally installs the command templates.
  *
  * Harness adapters (declarative, see HARNESS_TABLE):
- *   opencode  skill .agents/skills/bead-triage   commands .opencode/commands
+ *   opencode  skill .agents/skills/bead-triage   commands .opencode/commands (project/custom/global)
  *   claude    skill .claude/skills/bead-triage   (no commands)
  *   codex     skill .agents/skills/bead-triage   (no commands)
  *   pi        skill .agents/skills/bead-triage   (no commands)
  *   agents    skill .agents/skills/bead-triage   (no commands)
+ *   omp       skill .agents/skills/bead-triage   commands .omp/agent/commands (global only)
  *
  * The global scope uses the same relative paths under the home directory; the
  * OpenCode command directory is the documented global compatibility path
- * <home>/.config/opencode/commands.
+ * <home>/.config/opencode/commands. The omp harness installs its command group
+ * only at global scope; project and custom scopes omit commands and install
+ * the skill only.
  *
  * Safety model:
  *   - One registry per scope root (.bt-triage-registry.json) tracks every file
@@ -160,6 +163,13 @@ export const HARNESS_TABLE = {
     label: "Generic Agent Skills",
     skill: [".agents", "skills", SKILL_ID],
   },
+  omp: {
+    label: "omp",
+    skill: [".agents", "skills", SKILL_ID],
+    commands: {
+      global: [".omp", "agent", "commands"],
+    },
+  },
 };
 
 /** All known harness ids, in a stable order. */
@@ -222,14 +232,18 @@ function pruneEmptyDirs(root, { removeRoot = false } = {}) {
 // ─── Harness adapters ────────────────────────────────────────────────────────
 
 /**
- * The groups a harness installs: always the skill, plus commands for the
- * harnesses that document a command directory.
+ * The groups a harness installs: always the skill, plus commands only when the
+ * harness declares a command directory for the current scope kind.
+ *
+ * @param {string} harnessId
+ * @param {string} [scopeKind] kind of the target scope (project/custom/global)
+ * @returns {string[]} groups for the given harness
  */
-export function harnessGroups(harnessId) {
+export function harnessGroups(harnessId, scopeKind) {
   const def = HARNESS_TABLE[harnessId];
   if (!def) throw new Error(`Unknown harness "${harnessId}"`);
   const groups = ["skill"];
-  if (def.commands) groups.push("commands");
+  if (def.commands?.[scopeKind]) groups.push("commands");
   return groups;
 }
 
@@ -245,7 +259,10 @@ export function harnessDest(scope, harnessId, group) {
   if (group === "skill") return join(scope.root, ...def.skill);
   if (group === "commands") {
     if (!def.commands) throw new Error(`Harness "${harnessId}" installs no command files`);
-    const rel = def.commands[scope.kind] ?? def.commands.project;
+    if (!def.commands[scope.kind]) {
+      throw new Error(`Harness "${harnessId}" has no command directory for scope "${scope.kind}"`);
+    }
+    const rel = def.commands[scope.kind];
     return join(scope.root, ...rel);
   }
   throw new Error(`Unknown group "${group}"`);
@@ -693,7 +710,7 @@ export function buildPlan({ scope, source, registry, force = false, harnesses })
   const files = [];
 
   for (const harnessId of selected) {
-    for (const group of harnessGroups(harnessId)) {
+    for (const group of harnessGroups(harnessId, scope.kind)) {
       const dest = harnessDest(scope, harnessId, group);
       const srcDir = sourceDestDir(source, group);
       for (const rel of assets[group] ?? []) {
@@ -871,7 +888,7 @@ export function buildNextRegistry(scope, owners, previous) {
   ]);
   for (const harnessId of [...ids].sort()) {
     const groups = {};
-    for (const group of harnessGroups(harnessId)) {
+    for (const group of harnessGroups(harnessId, scope.kind)) {
       const dest = harnessDest(scope, harnessId, group);
       const files = [];
       for (const [key, map] of owners) {
@@ -1116,7 +1133,7 @@ export function uninstallAssets({ scope, harnesses, dryRun = false }) {
     // Prune empty directories only. rmdirSync refuses to remove a directory
     // that still holds files, so unrelated user content always survives.
     for (const harnessId of selected) {
-      for (const group of harnessGroups(harnessId)) {
+      for (const group of harnessGroups(harnessId, scope.kind)) {
         const dest = harnessDest(scope, harnessId, group);
         // The command directory may be shared with other commands, so its root
         // is kept; only empty subdirectories are pruned. The skill directory is
@@ -1408,7 +1425,7 @@ function cmdInstall(flags, { update = false } = {}) {
   out(`  root:     ${scope.root}`);
   out(`  harness:  ${harnesses.join(", ")}`);
   for (const harnessId of harnesses) {
-    for (const group of harnessGroups(harnessId)) {
+    for (const group of harnessGroups(harnessId, scope.kind)) {
       out(`  ${harnessId} ${group}: ${harnessDest(scope, harnessId, group)}`);
     }
   }
