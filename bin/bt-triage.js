@@ -666,6 +666,30 @@ function splitOwnershipKey(key) {
 }
 
 /**
+ * The per-file ownership map for `key`, creating it empty on first use.
+ *
+ * Several harnesses can own the same file, so a file that was not registered
+ * yet starts with an empty owner map.
+ */
+function ownerMapFor(owners, key) {
+  if (!owners.has(key)) owners.set(key, new Map());
+  return owners.get(key);
+}
+
+/**
+ * The owners of one file that the current operation does not touch.
+ *
+ * Planning and uninstalling only affect the selected harnesses (and, per
+ * entry, the one being retired); every other owner keeps the file alive, so
+ * the file cannot be removed or reported as retired.
+ */
+function otherRetainedOwners(map, harnessId, selected) {
+  return map
+    ? [...map.keys()].filter((owner) => owner !== harnessId && !selected.includes(owner))
+    : [];
+}
+
+/**
  * Build the ownership map of a registry.
  *
  * The map is keyed by destination directory and relative path and holds the
@@ -681,8 +705,7 @@ export function buildOwners(registry) {
       for (const entry of section?.files ?? []) {
         if (!entry || typeof entry.path !== "string") continue;
         const key = ownershipKey(section.dest, entry.path);
-        if (!owners.has(key)) owners.set(key, new Map());
-        owners.get(key).set(harnessId, entry.sha256);
+        ownerMapFor(owners, key).set(harnessId, entry.sha256);
       }
     }
   }
@@ -690,6 +713,239 @@ export function buildOwners(registry) {
 }
 
 // ─── Plan ────────────────────────────────────────────────────────────────────
+
+/**
+ * Decide the plan action for one source file.
+ *
+ * The decision only reads state: what is on disk, what the registry recorded
+ * and whether --force was given. `onDiskHash` is null when the target file
+ * does not exist (or was already planned to be (re)written earlier in this
+ * run).
+ */
+function classifyPlannedAction({ onDiskHash, registered, recordedHashes, srcHash, force }) {
+  if (onDiskHash === null) {
+    return { action: "create", reason: "not installed yet" };
+  }
+  if (!registered) {
+    return force
+      ? {
+          action: "overwrite",
+          reason: "existing unregistered file, overwritten because --force was given",
+        }
+      : {
+          action: "conflict",
+          reason: "existing unregistered file (not installed by this tool)",
+        };
+  }
+  if (recordedHashes.length === 0) {
+    return force
+      ? {
+          action: "overwrite",
+          reason: "no valid checksum in the registry, overwritten because --force was given",
+        }
+      : { action: "modified", reason: "no valid checksum in the registry, kept as is" };
+  }
+  if (!recordedHashes.includes(onDiskHash)) {
+    return force
+      ? {
+          action: "overwrite",
+          reason: "locally modified file, overwritten because --force was given",
+        }
+      : { action: "modified", reason: "locally modified file, kept as is" };
+  }
+  if (onDiskHash === srcHash) {
+    return { action: "unchanged", reason: "identical to the packaged version" };
+  }
+  return { action: "update", reason: "newer packaged version available" };
+}
+
+/**
+ * Fold one planned file into the ownership bookkeeping.
+ *
+ * A written file is planned with the new checksum and every existing owner
+ * moves to it. An unchanged file also moves its owners to the source checksum,
+ * so a stale entry cannot keep an old one. A modified file is planned with the
+ * first recorded checksum, so a later uninstall still recognises it.
+ */
+function recordPlannedOwnership({
+  action,
+  owners,
+  planned,
+  key,
+  harnessId,
+  srcHash,
+  recordedHashes,
+}) {
+  if (action === "create" || action === "update" || action === "overwrite") {
+    planned.set(key, srcHash);
+  } else if (action === "modified") {
+    if (recordedHashes.length > 0) ownerMapFor(owners, key).set(harnessId, recordedHashes[0]);
+    return;
+  } else if (action !== "unchanged") {
+    return;
+  }
+  // A written or unchanged file moves every existing owner to the checksum it
+  // is planned with.
+  const map = ownerMapFor(owners, key);
+  for (const owner of [...map.keys()]) map.set(owner, srcHash);
+  map.set(harnessId, srcHash);
+}
+
+/**
+ * Plan every file of one group of one harness.
+ *
+ * Appends one entry per source file to `files` and updates `owners` and
+ * `planned` in place, so a file shared by several harnesses is planned against
+ * the state the previous harness left behind.
+ */
+function planGroupFiles({
+  scope,
+  source,
+  assets,
+  harnessId,
+  group,
+  owners,
+  planned,
+  force,
+  files,
+}) {
+  const dest = harnessDest(scope, harnessId, group);
+  const srcDir = sourceDestDir(source, group);
+  for (const rel of assets[group] ?? []) {
+    const src = join(srcDir, ...rel.split("/"));
+    const destFile = join(dest, ...rel.split("/"));
+    const srcHash = sha256(src);
+    const key = ownershipKey(dest, rel);
+    const ownerMap = owners.get(key);
+    const registered = ownerMap && ownerMap.size > 0;
+    const recordedHashes = registered
+      ? [...ownerMap.values()].filter((value) => isValidSha256(value))
+      : [];
+
+    let onDiskHash = null;
+    if (planned.has(key)) {
+      onDiskHash = planned.get(key);
+    } else if (existsSync(destFile)) {
+      onDiskHash = sha256(destFile);
+    }
+
+    const { action, reason } = classifyPlannedAction({
+      onDiskHash,
+      registered,
+      recordedHashes,
+      srcHash,
+      force,
+    });
+
+    files.push({ harness: harnessId, group, rel, src, dest, destFile, srcHash, action, reason });
+    recordPlannedOwnership({ action, owners, planned, key, harnessId, srcHash, recordedHashes });
+  }
+}
+
+/**
+ * Plan the retirement of one registered file that is no longer shipped.
+ *
+ * A file that owners outside this update still need stays on disk; every
+ * harness in this update drops its ownership. An unsafe path is reported,
+ * never touched.
+ */
+function planStaleEntry({
+  harnessId,
+  group,
+  section,
+  entry,
+  shipped,
+  selected,
+  owners,
+  staleSeen,
+  stale,
+}) {
+  if (shipped.includes(entry.path)) return;
+  const key = ownershipKey(section.dest, entry.path);
+  if (staleSeen.has(key)) {
+    // The same file is registered by several harnesses; report it once.
+    return;
+  }
+  const destFile = safeJoin(section.dest, entry.path);
+  if (!destFile) {
+    // Never touch a path that leaves the destination directory.
+    stale.push({
+      harness: harnessId,
+      group,
+      rel: entry.path,
+      dest: null,
+      action: "unsafe",
+      reason: "registry path escapes the destination directory, kept as is",
+    });
+    return;
+  }
+  const map = owners.get(key);
+  // Owners outside this update keep the file alive.
+  const others = otherRetainedOwners(map, harnessId, selected);
+  if (others.length > 0) {
+    // The file is still owned by a harness outside this update: keep the
+    // file on disk, but drop the ownership of every harness we update.
+    for (const owner of selected) map.delete(owner);
+    staleSeen.add(key);
+    stale.push({
+      harness: harnessId,
+      group,
+      rel: entry.path,
+      dest: destFile,
+      action: "stale-shared",
+      reason: `still owned by ${others.join(", ")}, kept as is`,
+    });
+    return;
+  }
+  let action = "stale";
+  let reason = "no longer shipped by this package";
+  if (existsSync(destFile)) {
+    if (!isValidSha256(entry.sha256)) {
+      action = "modified";
+      reason = "no valid checksum in the registry, kept as is";
+    } else if (sha256(destFile) !== entry.sha256) {
+      action = "modified";
+      reason = "locally modified stale file, kept as is";
+    }
+  }
+  if (action === "stale") {
+    // Every owner that this update touches loses the file together.
+    for (const owner of selected) map?.delete(owner);
+    staleSeen.add(key);
+  }
+  stale.push({ harness: harnessId, group, rel: entry.path, dest: destFile, action, reason });
+}
+
+/**
+ * Plan the retirement of registered files that are no longer shipped.
+ */
+function planStaleFiles({ usable, assets, selected, owners }) {
+  const stale = [];
+  const registryHarnesses = usable?.harnesses ?? {};
+  const staleSeen = new Set();
+  for (const harnessId of Object.keys(registryHarnesses)) {
+    if (!selected.includes(harnessId)) continue;
+    const groups = registryHarnesses[harnessId] ?? {};
+    for (const [group, section] of Object.entries(groups)) {
+      const shipped = assets[group] ?? [];
+      for (const entry of section.files ?? []) {
+        if (!entry?.path) continue;
+        planStaleEntry({
+          harnessId,
+          group,
+          section,
+          entry,
+          shipped,
+          selected,
+          owners,
+          staleSeen,
+          stale,
+        });
+      }
+    }
+  }
+  return stale;
+}
 
 /**
  * Build a full plan for one scope and a set of harnesses.
@@ -711,158 +967,12 @@ export function buildPlan({ scope, source, registry, force = false, harnesses })
 
   for (const harnessId of selected) {
     for (const group of harnessGroups(harnessId, scope.kind)) {
-      const dest = harnessDest(scope, harnessId, group);
-      const srcDir = sourceDestDir(source, group);
-      for (const rel of assets[group] ?? []) {
-        const src = join(srcDir, ...rel.split("/"));
-        const destFile = join(dest, ...rel.split("/"));
-        const srcHash = sha256(src);
-        const key = ownershipKey(dest, rel);
-        const ownerMap = owners.get(key);
-        const registered = ownerMap && ownerMap.size > 0;
-        const recordedHashes = registered
-          ? [...ownerMap.values()].filter((value) => isValidSha256(value))
-          : [];
-
-        let onDiskHash = null;
-        if (planned.has(key)) {
-          onDiskHash = planned.get(key);
-        } else if (existsSync(destFile)) {
-          onDiskHash = sha256(destFile);
-        }
-
-        let action;
-        let reason;
-        if (onDiskHash === null) {
-          action = "create";
-          reason = "not installed yet";
-        } else if (!registered) {
-          action = force ? "overwrite" : "conflict";
-          reason = force
-            ? "existing unregistered file, overwritten because --force was given"
-            : "existing unregistered file (not installed by this tool)";
-        } else if (recordedHashes.length === 0) {
-          action = force ? "overwrite" : "modified";
-          reason = force
-            ? "no valid checksum in the registry, overwritten because --force was given"
-            : "no valid checksum in the registry, kept as is";
-        } else if (!recordedHashes.includes(onDiskHash)) {
-          action = force ? "overwrite" : "modified";
-          reason = force
-            ? "locally modified file, overwritten because --force was given"
-            : "locally modified file, kept as is";
-        } else if (onDiskHash === srcHash) {
-          action = "unchanged";
-          reason = "identical to the packaged version";
-        } else {
-          action = "update";
-          reason = "newer packaged version available";
-        }
-
-        files.push({
-          harness: harnessId,
-          group,
-          rel,
-          src,
-          dest,
-          destFile,
-          srcHash,
-          action,
-          reason,
-        });
-
-        // Ownership bookkeeping.
-        if (action === "create" || action === "update" || action === "overwrite") {
-          planned.set(key, srcHash);
-          if (!owners.has(key)) owners.set(key, new Map());
-          const map = owners.get(key);
-          for (const owner of [...map.keys()]) map.set(owner, srcHash);
-          map.set(harnessId, srcHash);
-        } else if (action === "unchanged") {
-          if (!owners.has(key)) owners.set(key, new Map());
-          const map = owners.get(key);
-          for (const owner of [...map.keys()]) map.set(owner, srcHash);
-          map.set(harnessId, srcHash);
-        } else if (action === "modified" && recordedHashes.length > 0) {
-          if (!owners.has(key)) owners.set(key, new Map());
-          const map = owners.get(key);
-          map.set(harnessId, recordedHashes[0]);
-        }
-      }
+      planGroupFiles({ scope, source, assets, harnessId, group, owners, planned, force, files });
     }
   }
 
   // Files registered previously that are no longer part of the package.
-  const stale = [];
-  const registryHarnesses = usable?.harnesses ?? {};
-  const staleSeen = new Set();
-  for (const harnessId of Object.keys(registryHarnesses)) {
-    if (!selected.includes(harnessId)) continue;
-    const groups = registryHarnesses[harnessId] ?? {};
-    for (const [group, section] of Object.entries(groups)) {
-      const dest = section.dest;
-      const shipped = assets[group] ?? [];
-      for (const entry of section.files ?? []) {
-        if (!entry?.path) continue;
-        if (shipped.includes(entry.path)) continue;
-        const key = ownershipKey(dest, entry.path);
-        if (staleSeen.has(key)) {
-          // The same file is registered by several harnesses; report it once.
-          continue;
-        }
-        const destFile = safeJoin(dest, entry.path);
-        if (!destFile) {
-          // Never touch a path that leaves the destination directory.
-          stale.push({
-            harness: harnessId,
-            group,
-            rel: entry.path,
-            dest: null,
-            action: "unsafe",
-            reason: "registry path escapes the destination directory, kept as is",
-          });
-          continue;
-        }
-        const map = owners.get(key);
-        // Owners outside this update keep the file alive.
-        const others = map
-          ? [...map.keys()].filter((owner) => owner !== harnessId && !selected.includes(owner))
-          : [];
-        if (others.length > 0) {
-          // The file is still owned by a harness outside this update: keep the
-          // file on disk, but drop the ownership of every harness we update.
-          for (const owner of selected) map.delete(owner);
-          staleSeen.add(key);
-          stale.push({
-            harness: harnessId,
-            group,
-            rel: entry.path,
-            dest: destFile,
-            action: "stale-shared",
-            reason: `still owned by ${others.join(", ")}, kept as is`,
-          });
-          continue;
-        }
-        let action = "stale";
-        let reason = "no longer shipped by this package";
-        if (existsSync(destFile)) {
-          if (!isValidSha256(entry.sha256)) {
-            action = "modified";
-            reason = "no valid checksum in the registry, kept as is";
-          } else if (sha256(destFile) !== entry.sha256) {
-            action = "modified";
-            reason = "locally modified stale file, kept as is";
-          }
-        }
-        if (action === "stale") {
-          // Every owner that this update touches loses the file together.
-          for (const owner of selected) map?.delete(owner);
-          staleSeen.add(key);
-        }
-        stale.push({ harness: harnessId, group, rel: entry.path, dest: destFile, action, reason });
-      }
-    }
-  }
+  const stale = planStaleFiles({ usable, assets, selected, owners });
 
   const problems = [
     ...files.filter((f) => f.action === "conflict" || f.action === "modified"),
@@ -1011,12 +1121,6 @@ export function installAssets({ scope, source, harnesses, dryRun = false, force 
 // ─── Uninstall ───────────────────────────────────────────────────────────────
 
 /**
- * Uninstall the assets of one scope for a set of harnesses.
- *
- * Only registered, unmodified files are removed. A file that is still owned by
- * another harness stays on disk until its last owner is removed.
- */
-/**
  * Drop every owner that this uninstall touches from an ownership map.
  *
  * A shared file is one entry in the map with one owner per harness. When a set
@@ -1028,6 +1132,132 @@ function dropOwners(map, selected) {
   for (const owner of selected) map.delete(owner);
 }
 
+/**
+ * Classify one registered file for uninstallation and apply the effect.
+ *
+ * The file is kept without being touched when another owner still needs it,
+ * when the checksum cannot prove ownership or when the file was modified.
+ * A shared file is removed once, by the last owner that this uninstall
+ * touches. Records the outcome in `removed`, `kept` or `missing`.
+ */
+function uninstallEntry({
+  harnessId,
+  group,
+  section,
+  entry,
+  owners,
+  selected,
+  handled,
+  dryRun,
+  removed,
+  kept,
+  missing,
+}) {
+  const destFile = safeJoin(section.dest, entry.path);
+  if (!destFile) {
+    kept.push({
+      harness: harnessId,
+      group,
+      path: entry.path,
+      dest: null,
+      reason: "registry path escapes the destination directory, kept as is",
+    });
+    return;
+  }
+  const key = ownershipKey(section.dest, entry.path);
+  if (handled.has(key)) return;
+  const map = owners.get(key);
+  // Owners that this uninstall does not touch keep the file alive.
+  const others = otherRetainedOwners(map, harnessId, selected);
+  if (others.length > 0) {
+    // Still owned by another harness: keep the file, drop only this owner.
+    map.delete(harnessId);
+    kept.push({
+      harness: harnessId,
+      group,
+      path: entry.path,
+      dest: destFile,
+      reason: `still owned by ${others.join(", ")}, kept as is`,
+    });
+    return;
+  }
+  if (!existsSync(destFile)) {
+    handled.add(key);
+    missing.push({ harness: harnessId, group, path: entry.path, dest: destFile });
+    dropOwners(map, selected);
+    return;
+  }
+  if (!isValidSha256(entry.sha256)) {
+    // Without a trustworthy checksum the file cannot be proven to be ours.
+    kept.push({
+      harness: harnessId,
+      group,
+      path: entry.path,
+      dest: destFile,
+      reason: "no valid checksum in the registry, kept as is",
+    });
+    return;
+  }
+  if (sha256(destFile) !== entry.sha256) {
+    kept.push({
+      harness: harnessId,
+      group,
+      path: entry.path,
+      dest: destFile,
+      reason: "modified since installation",
+    });
+    return;
+  }
+  if (!dryRun) rmSync(destFile, { force: true });
+  dropOwners(map, selected);
+  handled.add(key);
+  removed.push({ harness: harnessId, group, path: entry.path, dest: destFile });
+}
+
+/**
+ * Prune the now-empty destination directories of an uninstall.
+ *
+ * rmdirSync refuses to remove a directory that still holds files, so
+ * unrelated user content always survives.
+ */
+function pruneUninstallDests(scope, selected) {
+  for (const harnessId of selected) {
+    for (const group of harnessGroups(harnessId, scope.kind)) {
+      const dest = harnessDest(scope, harnessId, group);
+      // The command directory may be shared with other commands, so its root
+      // is kept; only empty subdirectories are pruned. The skill directory is
+      // owned by this tool and is removed when it is empty.
+      pruneEmptyDirs(dest, { removeRoot: group === "skill" });
+    }
+  }
+}
+
+/**
+ * Write the registry that survives an uninstall, or remove it when nothing
+ * was preserved so a later uninstall can no longer mistake the files for
+ * user-owned.
+ */
+function finalizeUninstallRegistry(scope, owners, registry) {
+  const next = buildNextRegistry(scope, owners, registry);
+  const hasEntries = Object.values(next.harnesses).some((groups) =>
+    Object.values(groups).some((section) => section.files.length > 0),
+  );
+  if (!hasEntries) {
+    // Nothing was preserved, so the registry is obsolete.
+    if (existsSync(scope.registryPath)) rmSync(scope.registryPath, { force: true });
+    return;
+  }
+  // Keep the registry with only the preserved files, so a later uninstall
+  // can still recognise them as user-owned.
+  writeRegistry(scope.registryPath, next);
+}
+
+/**
+ * Uninstall the assets of one scope for a set of harnesses.
+ *
+ * Only registered, unmodified files are removed. A file that is still owned by
+ * another harness stays on disk until its last owner is removed.
+ */
 export function uninstallAssets({ scope, harnesses, dryRun = false }) {
   const selected = harnesses ?? [DEFAULT_HARNESS];
   const registry = loadRegistry(scope.registryPath, { scope });
@@ -1064,96 +1294,26 @@ export function uninstallAssets({ scope, harnesses, dryRun = false }) {
     for (const [group, section] of Object.entries(groups)) {
       for (const entry of section.files ?? []) {
         if (!entry?.path) continue;
-        const destFile = safeJoin(section.dest, entry.path);
-        if (!destFile) {
-          kept.push({
-            harness: harnessId,
-            group,
-            path: entry.path,
-            dest: null,
-            reason: "registry path escapes the destination directory, kept as is",
-          });
-          continue;
-        }
-        const key = ownershipKey(section.dest, entry.path);
-        if (handled.has(key)) continue;
-        const map = owners.get(key);
-        // Owners that this uninstall does not touch keep the file alive.
-        const others = map
-          ? [...map.keys()].filter((owner) => owner !== harnessId && !selected.includes(owner))
-          : [];
-        if (others.length > 0) {
-          // Still owned by another harness: keep the file, drop only this owner.
-          map.delete(harnessId);
-          kept.push({
-            harness: harnessId,
-            group,
-            path: entry.path,
-            dest: destFile,
-            reason: `still owned by ${others.join(", ")}, kept as is`,
-          });
-          continue;
-        }
-        if (!existsSync(destFile)) {
-          handled.add(key);
-          missing.push({ harness: harnessId, group, path: entry.path, dest: destFile });
-          dropOwners(map, selected);
-          continue;
-        }
-        if (!isValidSha256(entry.sha256)) {
-          // Without a trustworthy checksum the file cannot be proven to be ours.
-          kept.push({
-            harness: harnessId,
-            group,
-            path: entry.path,
-            dest: destFile,
-            reason: "no valid checksum in the registry, kept as is",
-          });
-          continue;
-        }
-        if (sha256(destFile) !== entry.sha256) {
-          kept.push({
-            harness: harnessId,
-            group,
-            path: entry.path,
-            dest: destFile,
-            reason: "modified since installation",
-          });
-          continue;
-        }
-        if (!dryRun) rmSync(destFile, { force: true });
-        dropOwners(map, selected);
-        handled.add(key);
-        removed.push({ harness: harnessId, group, path: entry.path, dest: destFile });
+        uninstallEntry({
+          harnessId,
+          group,
+          section,
+          entry,
+          owners,
+          selected,
+          handled,
+          dryRun,
+          removed,
+          kept,
+          missing,
+        });
       }
     }
   }
 
   if (!dryRun) {
-    // Prune empty directories only. rmdirSync refuses to remove a directory
-    // that still holds files, so unrelated user content always survives.
-    for (const harnessId of selected) {
-      for (const group of harnessGroups(harnessId, scope.kind)) {
-        const dest = harnessDest(scope, harnessId, group);
-        // The command directory may be shared with other commands, so its root
-        // is kept; only empty subdirectories are pruned. The skill directory is
-        // owned by this tool and is removed when it is empty.
-        pruneEmptyDirs(dest, { removeRoot: group === "skill" });
-      }
-    }
-
-    const next = buildNextRegistry(scope, owners, registry);
-    const hasEntries = Object.values(next.harnesses).some((groups) =>
-      Object.values(groups).some((section) => section.files.length > 0),
-    );
-    if (!hasEntries) {
-      // Nothing was preserved, so the registry is obsolete.
-      if (existsSync(scope.registryPath)) rmSync(scope.registryPath, { force: true });
-    } else {
-      // Keep the registry with only the preserved files, so a later uninstall
-      // can still recognise them as user-owned.
-      writeRegistry(scope.registryPath, next);
-    }
+    pruneUninstallDests(scope, selected);
+    finalizeUninstallRegistry(scope, owners, registry);
   }
 
   return { scope, registry, removed, kept, missing, dryRun, nothing: false, harnesses: selected };
