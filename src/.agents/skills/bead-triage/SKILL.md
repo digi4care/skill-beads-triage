@@ -1,6 +1,7 @@
 ---
 name: bead-triage
 description: Shared core for bead triage in eight modes (continue, complete, add, status, tests, reflect, scaffold, triage). Invoke directly in the appropriate mode when the current user request clearly requires bead issue creation or management; wrappers are optional shortcuts. Preserve explicit user intent, typed/scope/evidence rules, and candidate native requirement safeguards.
+disable-model-invocation: true
 ---
 
 # Bead Triage
@@ -8,7 +9,7 @@ description: Shared core for bead triage in eight modes (continue, complete, add
 Shared core for the bead triage family. An entry point selects one mode and loads exactly one reference. Load only
 the reference the entry point asks for — never load several mode references at once.
 
-Wrappers such as `/bt_continue` are optional shortcuts for selecting a mode. The model may invoke this skill directly when
+Wrappers such as `/bt_continue` are optional shortcuts for selecting a mode. The user may invoke this skill directly when
 the current user request clearly requires bead issue creation or management; do not use it for unrelated requests.
 
 - **Wrapper invocation.** A thin OpenCode command (for example `/bt_continue`) selects the mode itself and names the
