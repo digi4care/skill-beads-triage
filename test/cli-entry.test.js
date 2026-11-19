@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { cleanup, makeTempDir } from "./helpers.js";
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "bt-triage.js");
+const PKG = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"),
+);
+const VERSION = PKG.version.replace(/\./g, "\\.");
 
 const dirs = [];
 function tmp() {
@@ -60,7 +64,6 @@ describe("cli entry point", () => {
     const result = run([link, "--version"]);
     assert.equal(result.code, 0, `expected exit code 0, got ${result.code}`);
     assert.match(result.stdout, /^bt-triage v\d+\.\d+\.\d+/);
-    assert.match(result.stdout, /bt-triage v0\.1\.0/);
   });
 
   it("runs when the symlink is executed directly through its shebang", () => {
@@ -75,7 +78,7 @@ describe("cli entry point", () => {
     const result = runDirect(link, ["--version"]);
     if (result.skipped) return; // The temp filesystem does not allow execution.
     assert.equal(result.code, 0, `expected exit code 0, got ${result.code}`);
-    assert.match(result.stdout, /bt-triage v0\.1\.0/);
+    assert.match(result.stdout, new RegExp(`bt-triage v${VERSION}`));
   });
 
   it("runs through a relative symlink as well", () => {
@@ -85,13 +88,13 @@ describe("cli entry point", () => {
 
     const result = run([link, "--version"]);
     assert.equal(result.code, 0);
-    assert.match(result.stdout, /bt-triage v0\.1\.0/);
+    assert.match(result.stdout, new RegExp(`bt-triage v${VERSION}`));
   });
 
   it("still runs when the real file is executed directly", () => {
     const result = run([BIN, "--version"]);
     assert.equal(result.code, 0);
-    assert.match(result.stdout, /bt-triage v0\.1\.0/);
+    assert.match(result.stdout, new RegExp(`bt-triage v${VERSION}`));
   });
 
   it("does not run the CLI when the module is imported", () => {
@@ -105,7 +108,7 @@ describe("cli entry point", () => {
 
     const result = run([importer]);
     assert.equal(result.code, 0);
-    assert.match(result.stdout, /^imported:0\.1\.0/);
+    assert.match(result.stdout, new RegExp(`^imported:${VERSION}`));
     assert.doesNotMatch(result.stdout, /^bt-triage v/m);
   });
 });
